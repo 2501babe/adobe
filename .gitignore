@@ -1,0 +1,5 @@
+*.swp
+*-debug.log
+.anchor/
+target/
+node_modules/
