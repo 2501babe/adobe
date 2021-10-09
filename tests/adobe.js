@@ -27,7 +27,8 @@ const tokenMintAuthority = new anchor.web3.Keypair;
 var tokenMint;
 var poolKey;
 var voucherMintKey;
-var walletTokenKey;
+var userTokenKey;
+var userVoucherKey;
 
 let [stateKey, stateBump] = findAddr([discriminator("State")], adobe.programId);
 
@@ -35,9 +36,9 @@ let [stateKey, stateBump] = findAddr([discriminator("State")], adobe.programId);
 function findAssocAddr(walletKey, mintKey) {
     return findAddr([
         walletKey.toBuffer(),
-        tokenProgramKey.toBuffer(),
+        TOKEN_PROGRAM_ID.toBuffer(),
         mintKey.toBuffer(),
-    ], assocTokenProgramKey);
+    ], ASSOCIATED_TOKEN_PROGRAM_ID);
 }
 
 // turns rust class name into discriminator
@@ -59,7 +60,43 @@ async function airdrop(target, lamps) {
     return sig;
 }
 
+// all the throwaway bullshit in one convenient location
+async function setup() {
+    // first create a fresh mint
+    tokenMint = await spl.Token.createMint(
+        conn,
+        wallet.payer,
+        tokenMintAuthority.publicKey,
+        null,
+        TOKEN_DECIMALS,
+        TOKEN_PROGRAM_ID,
+    );
+
+    // find the pdas for adobes corresponding pool and voucher mint
+    [poolKey] = findAddr([Buffer.from("POOL"), tokenMint.publicKey.toBuffer()], adobe.programId);
+    [voucherMintKey] = findAddr([Buffer.from("VOUCHER"), tokenMint.publicKey.toBuffer()], adobe.programId);
+
+    // create our wallet an associated account for the token
+    userTokenKey = (await tokenMint.getOrCreateAssociatedAccountInfo(wallet.publicKey)).address;
+
+    // mint authority needs money
+    await airdrop(tokenMintAuthority.publicKey, 100 * LAMPORTS_PER_SOL);
+
+    // and mint 100 of the token to the wallet
+    await tokenMint.mintTo(
+        userTokenKey,
+        tokenMintAuthority,
+        [],
+        100 * 10 ** TOKEN_DECIMALS,
+    );
+}
+
 describe("adobe flash loan program", () => {
+    let amount = 10 ** TOKEN_DECIMALS;
+
+    it("setup", async () => {
+        await setup();
+    });
 
     it("adobe new", async () => {
         await adobe.rpc.new(stateBump, {
@@ -74,26 +111,14 @@ describe("adobe flash loan program", () => {
     });
 
     it("adobe add_pool", async () => {
-        tokenMint = await spl.Token.createMint(
-            conn,
-            wallet.payer,
-            tokenMintAuthority.publicKey,
-            null,
-            TOKEN_DECIMALS,
-            TOKEN_PROGRAM_ID,
-        );
-
-        [poolKey] = findAddr([Buffer.from("POOL"), tokenMint.publicKey.toBuffer()], adobe.programId);
-        [voucherMintKey] = findAddr([Buffer.from("VOUCHER"), tokenMint.publicKey.toBuffer()], adobe.programId);
-
         await adobe.rpc.addPool({
             accounts: {
                 authority: wallet.publicKey,
                 state: stateKey,
-                rent: anchor.web3.SYSVAR_RENT_PUBKEY,
                 tokenMint: tokenMint.publicKey,
                 tokenPool: poolKey,
                 voucherMint: voucherMintKey,
+                rent: anchor.web3.SYSVAR_RENT_PUBKEY,
                 systemProgram: anchor.web3.SystemProgram.programId,
                 tokenProgram: TOKEN_PROGRAM_ID,
             },
@@ -101,20 +126,67 @@ describe("adobe flash loan program", () => {
         });
     });
 
-    it("adobe deposit/withdraw", async () => {
-        await airdrop(tokenMintAuthority.publicKey, 100 * LAMPORTS_PER_SOL);
-
-        // create the associated accounts for tokens
-        // XXX the voucher one should be part of the actual flow
-        walletTokenKey = (await tokenMint.getOrCreateAssociatedAccountInfo(wallet.publicKey)).address;
-        walletVoucherKey = (await tokenMint.getOrCreateAssociatedAccountInfo(wallet.publicKey)).address;
-
-        await tokenMint.mintTo(
-            walletTokenKey,
-            tokenMintAuthority,
-            [],
-            100 * 10 ** TOKEN_DECIMALS,
+    it("adobe deposit", async () => {
+        // deposit should implicitly create the user voucher account if needed
+        [userVoucherKey] = findAssocAddr(wallet.publicKey, voucherMintKey);
+        let createIxn = spl.Token.createAssociatedTokenAccountInstruction(
+            ASSOCIATED_TOKEN_PROGRAM_ID,
+            TOKEN_PROGRAM_ID,
+            voucherMintKey,
+            userVoucherKey,
+            wallet.publicKey,
+            wallet.publicKey,
         );
+
+        // we are virtuous and do not require a wallet signature on our instruction
+        let approveIxn = spl.Token.createApproveInstruction(
+            TOKEN_PROGRAM_ID,
+            userTokenKey,
+            stateKey,
+            wallet.publicKey,
+            [],
+            amount,
+        );
+
+        await adobe.rpc.deposit(new anchor.BN(amount), {
+            accounts: {
+                state: stateKey,
+                tokenMint: tokenMint.publicKey,
+                tokenPool: poolKey,
+                voucherMint: voucherMintKey,
+                userToken: userTokenKey,
+                userVoucher: userVoucherKey,
+                tokenProgram: TOKEN_PROGRAM_ID,
+            },
+            signers: [wallet.payer],
+            instructions: [createIxn, approveIxn],
+        });
+    });
+
+    it("adobe withdraw", async () => {
+        // again this is hardly much different
+        let approveIxn = spl.Token.createApproveInstruction(
+            TOKEN_PROGRAM_ID,
+            userVoucherKey,
+            stateKey,
+            wallet.publicKey,
+            [],
+            amount,
+        );
+
+        await adobe.rpc.withdraw(new anchor.BN(amount), {
+            accounts: {
+                state: stateKey,
+                tokenMint: tokenMint.publicKey,
+                tokenPool: poolKey,
+                voucherMint: voucherMintKey,
+                userToken: userTokenKey,
+                userVoucher: userVoucherKey,
+                tokenProgram: TOKEN_PROGRAM_ID,
+            },
+            signers: [wallet.payer],
+            instructions: [approveIxn],
+        });
     });
 
 /*

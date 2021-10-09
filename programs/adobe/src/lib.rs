@@ -1,6 +1,6 @@
 use anchor_lang::prelude::*;
 use anchor_lang::Discriminator;
-use anchor_spl::token::{self, Token, Burn, Mint, MintTo, TokenAccount};
+use anchor_spl::token::{self, Mint, TokenAccount, MintTo, Burn, Transfer, Token};
 
 declare_id!("Fg6PaFpoGXkYsidMpWTK6W2BeZ7FEfcYkg476zPFsLnS");
 
@@ -19,6 +19,7 @@ const VOUCHER_NAMESPACE: &[u8] = b"VOUCHER";
 // to step forward from itself and confirm the next adobe ixn is a restore for the same amount
 
 #[program]
+#[deny(unused_must_use)]
 pub mod adobe {
     use super::*;
 
@@ -38,18 +39,82 @@ pub mod adobe {
     pub fn add_pool(ctx: Context<AddPool>) -> ProgramResult {
         msg!("adobe add_pool");
 
+        // XXX create a struct for bumps and constraint enforcement
+
         Ok(())
     }
 
     // DEPOSIT
     // receives tokens and mints vouchers
     pub fn deposit(ctx: Context<Deposit>, amount: u64) -> ProgramResult {
+        msg!("adobe deposit");
+
+        let state_seed: &[&[&[u8]]] = &[&[
+            &State::discriminator()[..],
+            &[ctx.accounts.state.bump],
+        ]];
+
+        let transfer_ctx = CpiContext::new_with_signer(
+            ctx.accounts.token_program.to_account_info(),
+            Transfer {
+                from: ctx.accounts.user_token.to_account_info(),
+                to: ctx.accounts.token_pool.to_account_info(),
+                authority: ctx.accounts.state.to_account_info(),
+            },
+            state_seed,
+        );
+
+        token::transfer(transfer_ctx, amount)?;
+
+        let mint_ctx = CpiContext::new_with_signer(
+            ctx.accounts.token_program.to_account_info(),
+            MintTo {
+                mint: ctx.accounts.voucher_mint.to_account_info(),
+                to: ctx.accounts.user_voucher.to_account_info(),
+                authority: ctx.accounts.state.to_account_info(),
+            },
+            state_seed,
+        );
+
+        token::mint_to(mint_ctx, amount)?;
+
         Ok(())
     }
 
     // WITHDRAW
     // burns vouchers and disburses tokens
     pub fn withdraw(ctx: Context<Withdraw>, amount: u64) -> ProgramResult {
+        msg!("adobe withdraw");
+
+        let state_seed: &[&[&[u8]]] = &[&[
+            &State::discriminator()[..],
+            &[ctx.accounts.state.bump],
+        ]];
+
+        let burn_ctx = CpiContext::new_with_signer(
+            ctx.accounts.token_program.to_account_info(),
+            Burn {
+                mint: ctx.accounts.voucher_mint.to_account_info(),
+                to: ctx.accounts.user_voucher.to_account_info(),
+                authority: ctx.accounts.state.to_account_info(),
+            },
+            state_seed,
+        );
+
+        token::burn(burn_ctx, amount)?;
+
+        let transfer_ctx = CpiContext::new_with_signer(
+            ctx.accounts.token_program.to_account_info(),
+            Transfer {
+                from: ctx.accounts.token_pool.to_account_info(),
+                to: ctx.accounts.user_token.to_account_info(),
+                authority: ctx.accounts.state.to_account_info(),
+            },
+            state_seed,
+        );
+
+        token::transfer(transfer_ctx, amount)?;
+
         Ok(())
     }
 
@@ -117,10 +182,34 @@ pub struct AddPool<'info> {
 }
 
 #[derive(Accounts)]
-pub struct Deposit {}
+pub struct Deposit<'info> {
+    #[account(seeds = [&State::discriminator()[..]], bump = state.bump)]
+    pub state: Account<'info, State>,
+    #[account(mut)]
+    pub token_pool: Account<'info, TokenAccount>,
+    #[account(mut)]
+    pub voucher_mint: Account<'info, Mint>,
+    #[account(mut)]
+    pub user_token: Account<'info, TokenAccount>,
+    #[account(mut)]
+    pub user_voucher: Account<'info, TokenAccount>,
+    pub token_program: Program<'info, Token>,
+}
 
 #[derive(Accounts)]
-pub struct Withdraw {}
+pub struct Withdraw<'info> {
+    #[account(seeds = [&State::discriminator()[..]], bump = state.bump)]
+    pub state: Account<'info, State>,
+    #[account(mut)]
+    pub token_pool: Account<'info, TokenAccount>,
+    #[account(mut)]
+    pub voucher_mint: Account<'info, Mint>,
+    #[account(mut)]
+    pub user_token: Account<'info, TokenAccount>,
+    #[account(mut)]
+    pub user_voucher: Account<'info, TokenAccount>,
+    pub token_program: Program<'info, Token>,
+}
 
 #[derive(Accounts)]
 pub struct Borrow {}
