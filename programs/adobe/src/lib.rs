@@ -121,12 +121,48 @@ pub mod adobe {
     // BORROW
     // confirms there exists a matching restore, then lends tokens
     pub fn borrow(ctx: Context<Borrow>, amount: u64) -> ProgramResult {
+        msg!("adobe borrow");
+
+        let state_seed: &[&[&[u8]]] = &[&[
+            &State::discriminator()[..],
+            &[ctx.accounts.state.bump],
+        ]];
+
+        let transfer_ctx = CpiContext::new_with_signer(
+            ctx.accounts.token_program.to_account_info(),
+            Transfer {
+                from: ctx.accounts.token_pool.to_account_info(),
+                to: ctx.accounts.user_token.to_account_info(),
+                authority: ctx.accounts.state.to_account_info(),
+            },
+            state_seed,
+        );
+
+        token::transfer(transfer_ctx, amount)?;
+
         Ok(())
     }
 
     // RESTORE
     // receives tokens
     pub fn restore(ctx: Context<Restore>, amount: u64) -> ProgramResult {
+        let state_seed: &[&[&[u8]]] = &[&[
+            &State::discriminator()[..],
+            &[ctx.accounts.state.bump],
+        ]];
+
+        let transfer_ctx = CpiContext::new_with_signer(
+            ctx.accounts.token_program.to_account_info(),
+            Transfer {
+                from: ctx.accounts.user_token.to_account_info(),
+                to: ctx.accounts.token_pool.to_account_info(),
+                authority: ctx.accounts.user.to_account_info(),
+            },
+            state_seed,
+        );
+
+        token::transfer(transfer_ctx, amount)?;
+
         Ok(())
     }
 }
@@ -212,10 +248,28 @@ pub struct Withdraw<'info> {
 }
 
 #[derive(Accounts)]
-pub struct Borrow {}
+pub struct Borrow<'info> {
+    #[account(seeds = [&State::discriminator()[..]], bump = state.bump)]
+    pub state: Account<'info, State>,
+    #[account(mut)]
+    pub token_pool: Account<'info, TokenAccount>,
+    #[account(mut)]
+    pub user_token: Account<'info, TokenAccount>,
+    // XXX ixn sysvar
+    pub token_program: Program<'info, Token>,
+}
 
 #[derive(Accounts)]
-pub struct Restore {}
+pub struct Restore<'info> {
+    pub user: Signer<'info>,
+    #[account(seeds = [&State::discriminator()[..]], bump = state.bump)]
+    pub state: Account<'info, State>,
+    #[account(mut)]
+    pub token_pool: Account<'info, TokenAccount>,
+    #[account(mut)]
+    pub user_token: Account<'info, TokenAccount>,
+    pub token_program: Program<'info, Token>,
+}
 
 #[account]
 #[derive(Default)]

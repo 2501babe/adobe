@@ -9,7 +9,7 @@ const TXN_OPTS = {commitment: "processed", preflightCommitment: "processed", ski
 const TOKEN_DECIMALS = 6;
 
 anchor.setProvider(anchor.Provider.local(null, TXN_OPTS));
-const conn = anchor.getProvider().connection;
+const provider = anchor.getProvider();
 
 const adobe = anchor.workspace.Adobe;
 const wallet = anchor.getProvider().wallet;
@@ -55,8 +55,8 @@ function sleep(ms) {
 
 // this is annoying because the native function doesnt mesh well with the anchor txopts or something idk
 async function airdrop(target, lamps) {
-    let sig = await conn.requestAirdrop(target, lamps);
-    await conn.confirmTransaction(sig);
+    let sig = await provider.connection.requestAirdrop(target, lamps);
+    await provider.connection.confirmTransaction(sig);
     return sig;
 }
 
@@ -64,7 +64,7 @@ async function airdrop(target, lamps) {
 async function setup() {
     // first create a fresh mint
     tokenMint = await spl.Token.createMint(
-        conn,
+        provider.connection,
         wallet.payer,
         tokenMintAuthority.publicKey,
         null,
@@ -145,13 +145,12 @@ describe("adobe flash loan program", () => {
             stateKey,
             wallet.publicKey,
             [],
-            amount,
+            amount * 2,
         );
 
-        await adobe.rpc.deposit(new anchor.BN(amount), {
+        await adobe.rpc.deposit(new anchor.BN(amount * 2), {
             accounts: {
                 state: stateKey,
-                tokenMint: tokenMint.publicKey,
                 tokenPool: poolKey,
                 voucherMint: voucherMintKey,
                 userToken: userTokenKey,
@@ -177,7 +176,6 @@ describe("adobe flash loan program", () => {
         await adobe.rpc.withdraw(new anchor.BN(amount), {
             accounts: {
                 state: stateKey,
-                tokenMint: tokenMint.publicKey,
                 tokenPool: poolKey,
                 voucherMint: voucherMintKey,
                 userToken: userTokenKey,
@@ -189,7 +187,30 @@ describe("adobe flash loan program", () => {
         });
     });
 
-/*
-*/
+    it("adobe borrow/restore", async () => {
+        let borrowIxn = adobe.instruction.borrow(new anchor.BN(amount), {
+            accounts: {
+                state: stateKey,
+                tokenPool: poolKey,
+                userToken: userTokenKey,
+                // XXX ixn sysvar
+                tokenProgram: TOKEN_PROGRAM_ID,
+        }});
+
+        let restoreIxn = adobe.instruction.restore(new anchor.BN(amount), {
+            accounts: {
+                user: wallet.publicKey,
+                state: stateKey,
+                tokenPool: poolKey,
+                userToken: userTokenKey,
+                tokenProgram: TOKEN_PROGRAM_ID,
+        }});
+
+        let txn = new anchor.web3.Transaction;
+        txn.add(borrowIxn);
+        txn.add(restoreIxn);
+
+        await provider.send(txn);
+    });
 
 });
