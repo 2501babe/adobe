@@ -6,7 +6,7 @@ use anchor_lang::solana_program as solana;
 
 declare_id!("Fg6PaFpoGXkYsidMpWTK6W2BeZ7FEfcYkg476zPFsLnS");
 
-const POOL_NAMESPACE: &[u8]    = b"POOL";
+const TOKEN_NAMESPACE: &[u8]   = b"TOKEN";
 const VOUCHER_NAMESPACE: &[u8] = b"VOUCHER";
 const RESTORE_OPCODE: u64      = 0x4d257a808b23063a;
 
@@ -38,11 +38,13 @@ pub mod adobe {
     }
 
     // ADD POOL
-    // for a given token mint, sets up a token pool account and a voucher mint
+    // for a given token mint, sets up a pool struct, token account, and voucher mint
     pub fn add_pool(ctx: Context<AddPool>) -> ProgramResult {
         msg!("adobe add_pool");
 
-        // XXX create a struct for bumps and constraint enforcement
+        ctx.accounts.pool.token_mint = ctx.accounts.token_mint.key();
+        ctx.accounts.pool.pool_token = ctx.accounts.pool_token.key();
+        ctx.accounts.pool.voucher_mint = ctx.accounts.voucher_mint.key();
 
         Ok(())
     }
@@ -61,7 +63,7 @@ pub mod adobe {
             ctx.accounts.token_program.to_account_info(),
             Transfer {
                 from: ctx.accounts.user_token.to_account_info(),
-                to: ctx.accounts.token_pool.to_account_info(),
+                to: ctx.accounts.pool_token.to_account_info(),
                 authority: ctx.accounts.state.to_account_info(),
             },
             state_seed,
@@ -109,7 +111,7 @@ pub mod adobe {
         let transfer_ctx = CpiContext::new_with_signer(
             ctx.accounts.token_program.to_account_info(),
             Transfer {
-                from: ctx.accounts.token_pool.to_account_info(),
+                from: ctx.accounts.pool_token.to_account_info(),
                 to: ctx.accounts.user_token.to_account_info(),
                 authority: ctx.accounts.state.to_account_info(),
             },
@@ -139,17 +141,16 @@ pub mod adobe {
                     // this is the "yes i know the difference between regular and context-free grammers" case
                     if u64::from_be_bytes(ixn.data[..8].try_into().unwrap()) == RESTORE_OPCODE
                     && u64::from_le_bytes(ixn.data[8..16].try_into().unwrap()) == amount {
-                        msg!("equivalent restore!");
                         break;
                     } else {
-                        panic!("non-restore adobe call error here");
+                        return Err(AdobeError::ExtraCall.into());
                     }
                 } else {
                     i += 1;
                 }
             }
             else {
-                panic!("no restore error here");
+                return Err(AdobeError::NoRestore.into());
             }
         }
 
@@ -161,7 +162,7 @@ pub mod adobe {
         let transfer_ctx = CpiContext::new_with_signer(
             ctx.accounts.token_program.to_account_info(),
             Transfer {
-                from: ctx.accounts.token_pool.to_account_info(),
+                from: ctx.accounts.pool_token.to_account_info(),
                 to: ctx.accounts.user_token.to_account_info(),
                 authority: ctx.accounts.state.to_account_info(),
             },
@@ -185,7 +186,7 @@ pub mod adobe {
             ctx.accounts.token_program.to_account_info(),
             Transfer {
                 from: ctx.accounts.user_token.to_account_info(),
-                to: ctx.accounts.token_pool.to_account_info(),
+                to: ctx.accounts.pool_token.to_account_info(),
                 authority: ctx.accounts.user.to_account_info(),
             },
             state_seed,
@@ -226,13 +227,20 @@ pub struct AddPool<'info> {
     pub token_mint: Account<'info, Mint>,
     #[account(
         init,
-        seeds = [POOL_NAMESPACE, token_mint.key().as_ref()],
+        seeds = [&Pool::discriminator()[..], token_mint.key().as_ref()],
+        bump,
+        payer = authority,
+    )]
+    pub pool: Account<'info, Pool>,
+    #[account(
+        init,
+        seeds = [TOKEN_NAMESPACE, token_mint.key().as_ref()],
         bump,
         token::mint = token_mint,
         token::authority = state,
         payer = authority,
     )]
-    pub token_pool: Account<'info, TokenAccount>,
+    pub pool_token: Account<'info, TokenAccount>,
     #[account(
         init,
         seeds = [VOUCHER_NAMESPACE, token_mint.key().as_ref()],
@@ -251,13 +259,15 @@ pub struct AddPool<'info> {
 pub struct Deposit<'info> {
     #[account(seeds = [&State::discriminator()[..]], bump = state.bump)]
     pub state: Account<'info, State>,
-    #[account(mut)]
-    pub token_pool: Account<'info, TokenAccount>,
-    #[account(mut)]
+    #[account(seeds = [&Pool::discriminator()[..], pool.token_mint.as_ref()], bump)]
+    pub pool: Account<'info, Pool>,
+    #[account(mut, address = pool.pool_token)]
+    pub pool_token: Account<'info, TokenAccount>,
+    #[account(mut, address = pool.voucher_mint)]
     pub voucher_mint: Account<'info, Mint>,
-    #[account(mut)]
+    #[account(mut, constraint =  user_token.mint == pool.token_mint)]
     pub user_token: Account<'info, TokenAccount>,
-    #[account(mut)]
+    #[account(mut, constraint = user_voucher.mint == pool.voucher_mint)]
     pub user_voucher: Account<'info, TokenAccount>,
     pub token_program: Program<'info, Token>,
 }
@@ -266,13 +276,15 @@ pub struct Deposit<'info> {
 pub struct Withdraw<'info> {
     #[account(seeds = [&State::discriminator()[..]], bump = state.bump)]
     pub state: Account<'info, State>,
-    #[account(mut)]
-    pub token_pool: Account<'info, TokenAccount>,
-    #[account(mut)]
+    #[account(seeds = [&Pool::discriminator()[..], pool.token_mint.as_ref()], bump)]
+    pub pool: Account<'info, Pool>,
+    #[account(mut, address = pool.pool_token)]
+    pub pool_token: Account<'info, TokenAccount>,
+    #[account(mut, address = pool.voucher_mint)]
     pub voucher_mint: Account<'info, Mint>,
-    #[account(mut)]
+    #[account(mut, constraint =  user_token.mint == pool.token_mint)]
     pub user_token: Account<'info, TokenAccount>,
-    #[account(mut)]
+    #[account(mut, constraint = user_voucher.mint == pool.voucher_mint)]
     pub user_voucher: Account<'info, TokenAccount>,
     pub token_program: Program<'info, Token>,
 }
@@ -281,9 +293,11 @@ pub struct Withdraw<'info> {
 pub struct Borrow<'info> {
     #[account(seeds = [&State::discriminator()[..]], bump = state.bump)]
     pub state: Account<'info, State>,
-    #[account(mut)]
-    pub token_pool: Account<'info, TokenAccount>,
-    #[account(mut)]
+    #[account(seeds = [&Pool::discriminator()[..], pool.token_mint.as_ref()], bump)]
+    pub pool: Account<'info, Pool>,
+    #[account(mut, address = pool.pool_token)]
+    pub pool_token: Account<'info, TokenAccount>,
+    #[account(mut, constraint =  user_token.mint == pool.token_mint)]
     pub user_token: Account<'info, TokenAccount>,
     pub instructions: UncheckedAccount<'info>,
     pub token_program: Program<'info, Token>,
@@ -294,9 +308,11 @@ pub struct Restore<'info> {
     pub user: Signer<'info>,
     #[account(seeds = [&State::discriminator()[..]], bump = state.bump)]
     pub state: Account<'info, State>,
-    #[account(mut)]
-    pub token_pool: Account<'info, TokenAccount>,
-    #[account(mut)]
+    #[account(seeds = [&Pool::discriminator()[..], pool.token_mint.as_ref()], bump)]
+    pub pool: Account<'info, Pool>,
+    #[account(mut, address = pool.pool_token)]
+    pub pool_token: Account<'info, TokenAccount>,
+    #[account(mut, constraint =  user_token.mint == pool.token_mint)]
     pub user_token: Account<'info, TokenAccount>,
     pub token_program: Program<'info, Token>,
 }
@@ -306,4 +322,20 @@ pub struct Restore<'info> {
 pub struct State {
     bump: u8,
     authority: Pubkey,
+}
+
+#[account]
+#[derive(Default)]
+pub struct Pool {
+    token_mint: Pubkey,
+    pool_token: Pubkey,
+    voucher_mint: Pubkey,
+}
+
+#[error]
+pub enum AdobeError {
+    #[msg("borrow requires an equivalent restore")]
+    NoRestore,
+    #[msg("non-restore adobe calls after borrow are disallowed")]
+    ExtraCall,
 }

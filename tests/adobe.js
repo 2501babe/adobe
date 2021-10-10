@@ -26,7 +26,7 @@ const findAddr = anchor.utils.publicKey.findProgramAddressSync;
 // * user associated account
 const tokenMintAuthority = new anchor.web3.Keypair;
 var tokenMint;
-var poolKey;
+var poolTokenKey;
 var voucherMintKey;
 var userTokenKey;
 var userVoucherKey;
@@ -74,7 +74,8 @@ async function setup() {
     );
 
     // find the pdas for adobes corresponding pool and voucher mint
-    [poolKey] = findAddr([Buffer.from("POOL"), tokenMint.publicKey.toBuffer()], adobe.programId);
+    [poolKey] = findAddr([discriminator("Pool"), tokenMint.publicKey.toBuffer()], adobe.programId);
+    [poolTokenKey] = findAddr([Buffer.from("TOKEN"), tokenMint.publicKey.toBuffer()], adobe.programId);
     [voucherMintKey] = findAddr([Buffer.from("VOUCHER"), tokenMint.publicKey.toBuffer()], adobe.programId);
 
     // create our wallet an associated account for the token
@@ -117,7 +118,8 @@ describe("adobe flash loan program", () => {
                 authority: wallet.publicKey,
                 state: stateKey,
                 tokenMint: tokenMint.publicKey,
-                tokenPool: poolKey,
+                pool: poolKey,
+                poolToken: poolTokenKey,
                 voucherMint: voucherMintKey,
                 rent: anchor.web3.SYSVAR_RENT_PUBKEY,
                 systemProgram: anchor.web3.SystemProgram.programId,
@@ -152,7 +154,8 @@ describe("adobe flash loan program", () => {
         await adobe.rpc.deposit(new anchor.BN(amount * 2), {
             accounts: {
                 state: stateKey,
-                tokenPool: poolKey,
+                pool: poolKey,
+                poolToken: poolTokenKey,
                 voucherMint: voucherMintKey,
                 userToken: userTokenKey,
                 userVoucher: userVoucherKey,
@@ -177,7 +180,8 @@ describe("adobe flash loan program", () => {
         await adobe.rpc.withdraw(new anchor.BN(amount), {
             accounts: {
                 state: stateKey,
-                tokenPool: poolKey,
+                pool: poolKey,
+                poolToken: poolTokenKey,
                 voucherMint: voucherMintKey,
                 userToken: userTokenKey,
                 userVoucher: userVoucherKey,
@@ -192,7 +196,8 @@ describe("adobe flash loan program", () => {
         let borrowIxn = adobe.instruction.borrow(new anchor.BN(amount), {
             accounts: {
                 state: stateKey,
-                tokenPool: poolKey,
+                pool: poolKey,
+                poolToken: poolTokenKey,
                 userToken: userTokenKey,
                 instructions: SYSVAR_INSTRUCTIONS_PUBKEY,
                 tokenProgram: TOKEN_PROGRAM_ID,
@@ -201,8 +206,9 @@ describe("adobe flash loan program", () => {
         let restoreIxn = adobe.instruction.restore(new anchor.BN(amount), {
             accounts: {
                 user: wallet.publicKey,
+                pool: poolKey,
                 state: stateKey,
-                tokenPool: poolKey,
+                poolToken: poolTokenKey,
                 userToken: userTokenKey,
                 tokenProgram: TOKEN_PROGRAM_ID,
         }});
