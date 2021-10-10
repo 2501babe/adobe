@@ -10,17 +10,6 @@ const TOKEN_NAMESPACE: &[u8]   = b"TOKEN";
 const VOUCHER_NAMESPACE: &[u8] = b"VOUCHER";
 const RESTORE_OPCODE: u64      = 0x4d257a808b23063a;
 
-// XXX oki shower first but what am i doing here
-// simple function list
-// * new: i dont know if i actually need this?
-// * add_pool: given a mint, sets up a token account
-// * deposit
-// * withdraw
-// * borrow
-// * restore
-// and the only tricky thing here is borrow must use transaction introspection
-// to step forward from itself and confirm the next adobe ixn is a restore for the same amount
-
 #[program]
 #[deny(unused_must_use)]
 pub mod adobe {

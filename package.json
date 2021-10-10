@@ -1,4 +1,5 @@
 {
+    "type": "module",
     "dependencies": {
         "@project-serum/anchor": "^0.17.0",
         "@solana/spl-token": "^0.1.8"

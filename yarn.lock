@@ -872,9 +872,9 @@ require-directory@^2.1.1:
   integrity sha1-jGStX9MNqxyXbiNE/+f3kqam30I=
 
 rpc-websockets@^7.4.2:
-  version "7.4.14"
-  resolved "https://registry.yarnpkg.com/rpc-websockets/-/rpc-websockets-7.4.14.tgz#d1774ce4d4c231dea6ed448d2bc224587b9561a5"
-  integrity sha512-x/2Rwzla6bXAyE8A21yx3sHjn49JUlgBUYfnKurNeqrZQgFxfD43Udo5NkTWQp+TASrssTlks8ipcJfvswgv5g==
+  version "7.4.15"
+  resolved "https://registry.yarnpkg.com/rpc-websockets/-/rpc-websockets-7.4.15.tgz#1f6b4640231c1d6479b9fda347e418d0b54ddab5"
+  integrity sha512-ICuqy1MeGl7z0/kesAShN1Lz0AYvOPLpmv2hzfIV5YNGhmJl+B/osmFoWrvxZcQnn/wyPl4Q29ItTJkXFNc9oA==
   dependencies:
     "@babel/runtime" "^7.11.2"
     circular-json "^0.5.9"

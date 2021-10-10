@@ -1,6 +1,8 @@
-const anchor = require("@project-serum/anchor");
-const spl = require("@solana/spl-token");
-const sha256 = require("js-sha256").sha256;
+import anchor from "@project-serum/anchor";
+import spl from "@solana/spl-token";
+import { sha256 } from "js-sha256";
+import { findAddr, findAssocAddr, discriminator, airdrop} from "../app/util.js";
+
 const LAMPORTS_PER_SOL = anchor.web3.LAMPORTS_PER_SOL;
 const SYSVAR_INSTRUCTIONS_PUBKEY = anchor.web3.SYSVAR_INSTRUCTIONS_PUBKEY;
 const TOKEN_PROGRAM_ID = spl.TOKEN_PROGRAM_ID;
@@ -15,51 +17,21 @@ const provider = anchor.getProvider();
 const adobe = anchor.workspace.Adobe;
 const wallet = anchor.getProvider().wallet;
 
-// abbreviation for too long name
-// note this returns the array
-const findAddr = anchor.utils.publicKey.findProgramAddressSync;
-
 // we create a fresh token, for which we need...
 // * arbitrary authority
 // * derived pool address
 // * derived voucher address
 // * user associated account
 const tokenMintAuthority = new anchor.web3.Keypair;
-var tokenMint;
-var poolTokenKey;
-var voucherMintKey;
-var userTokenKey;
-var userVoucherKey;
+let tokenMint;
+let poolKey;
+let poolBump;
+let poolTokenKey;
+let voucherMintKey;
+let userTokenKey;
+let userVoucherKey;
 
 let [stateKey, stateBump] = findAddr([discriminator("State")], adobe.programId);
-
-// associated token addresses. also returns array
-function findAssocAddr(walletKey, mintKey) {
-    return findAddr([
-        walletKey.toBuffer(),
-        TOKEN_PROGRAM_ID.toBuffer(),
-        mintKey.toBuffer(),
-    ], ASSOCIATED_TOKEN_PROGRAM_ID);
-}
-
-// turns rust class name into discriminator
-// i use these to namespace pdas
-function discriminator(name) {
-    let hash = sha256("account:" + name);
-    return Buffer.from(hash.substring(0, 16), "hex");
-}
-
-// dont leave home without one
-function sleep(ms) {
-    return new Promise(resolve => setTimeout(resolve, ms));
-}
-
-// this is annoying because the native function doesnt mesh well with the anchor txopts or something idk
-async function airdrop(target, lamps) {
-    let sig = await provider.connection.requestAirdrop(target, lamps);
-    await provider.connection.confirmTransaction(sig);
-    return sig;
-}
 
 // all the throwaway bullshit in one convenient location
 async function setup() {
@@ -82,7 +54,7 @@ async function setup() {
     userTokenKey = (await tokenMint.getOrCreateAssociatedAccountInfo(wallet.publicKey)).address;
 
     // mint authority needs money
-    await airdrop(tokenMintAuthority.publicKey, 100 * LAMPORTS_PER_SOL);
+    await airdrop(provider, tokenMintAuthority.publicKey, 100 * LAMPORTS_PER_SOL);
 
     // and mint 100 of the token to the wallet
     await tokenMint.mintTo(
