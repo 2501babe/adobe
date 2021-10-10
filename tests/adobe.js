@@ -2,6 +2,7 @@ const anchor = require("@project-serum/anchor");
 const spl = require("@solana/spl-token");
 const sha256 = require("js-sha256").sha256;
 const LAMPORTS_PER_SOL = anchor.web3.LAMPORTS_PER_SOL;
+const SYSVAR_INSTRUCTIONS_PUBKEY = anchor.web3.SYSVAR_INSTRUCTIONS_PUBKEY;
 const TOKEN_PROGRAM_ID = spl.TOKEN_PROGRAM_ID;
 const ASSOCIATED_TOKEN_PROGRAM_ID = spl.ASSOCIATED_TOKEN_PROGRAM_ID;
 
@@ -193,7 +194,7 @@ describe("adobe flash loan program", () => {
                 state: stateKey,
                 tokenPool: poolKey,
                 userToken: userTokenKey,
-                // XXX ixn sysvar
+                instructions: SYSVAR_INSTRUCTIONS_PUBKEY,
                 tokenProgram: TOKEN_PROGRAM_ID,
         }});
 

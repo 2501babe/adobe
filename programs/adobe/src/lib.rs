@@ -1,11 +1,14 @@
+use core::convert::TryInto;
 use anchor_lang::prelude::*;
 use anchor_lang::Discriminator;
 use anchor_spl::token::{self, Mint, TokenAccount, MintTo, Burn, Transfer, Token};
+use anchor_lang::solana_program as solana;
 
 declare_id!("Fg6PaFpoGXkYsidMpWTK6W2BeZ7FEfcYkg476zPFsLnS");
 
 const POOL_NAMESPACE: &[u8]    = b"POOL";
 const VOUCHER_NAMESPACE: &[u8] = b"VOUCHER";
+const RESTORE_OPCODE: u64      = 0x4d257a808b23063a;
 
 // XXX oki shower first but what am i doing here
 // simple function list
@@ -122,6 +125,33 @@ pub mod adobe {
     // confirms there exists a matching restore, then lends tokens
     pub fn borrow(ctx: Context<Borrow>, amount: u64) -> ProgramResult {
         msg!("adobe borrow");
+
+        let ixn_data = ctx.accounts.instructions.try_borrow_data()?;
+
+        // loop through instructions, looking for an equivalent restore to this borrow
+        let mut i = solana::sysvar::instructions::load_current_index(&ixn_data) as usize + 1;
+        loop {
+            // get the next instruction, die if theres no more
+            if let Ok(ixn) = solana::sysvar::instructions::load_instruction_at(i, &ixn_data) {
+                // check if its a call to this program, otherwise continue
+                if ixn.program_id == *ctx.program_id {
+                    // the only allowed call to this program is an equivalent restore
+                    // this is the "yes i know the difference between regular and context-free grammers" case
+                    if u64::from_be_bytes(ixn.data[..8].try_into().unwrap()) == RESTORE_OPCODE
+                    && u64::from_le_bytes(ixn.data[8..16].try_into().unwrap()) == amount {
+                        msg!("equivalent restore!");
+                        break;
+                    } else {
+                        panic!("non-restore adobe call error here");
+                    }
+                } else {
+                    i += 1;
+                }
+            }
+            else {
+                panic!("no restore error here");
+            }
+        }
 
         let state_seed: &[&[&[u8]]] = &[&[
             &State::discriminator()[..],
@@ -255,7 +285,7 @@ pub struct Borrow<'info> {
     pub token_pool: Account<'info, TokenAccount>,
     #[account(mut)]
     pub user_token: Account<'info, TokenAccount>,
-    // XXX ixn sysvar
+    pub instructions: UncheckedAccount<'info>,
     pub token_program: Program<'info, Token>,
 }
 
