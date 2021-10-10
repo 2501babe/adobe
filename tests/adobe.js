@@ -74,7 +74,7 @@ async function setup() {
     );
 
     // find the pdas for adobes corresponding pool and voucher mint
-    [poolKey] = findAddr([discriminator("Pool"), tokenMint.publicKey.toBuffer()], adobe.programId);
+    [poolKey, poolBump] = findAddr([discriminator("Pool"), tokenMint.publicKey.toBuffer()], adobe.programId);
     [poolTokenKey] = findAddr([Buffer.from("TOKEN"), tokenMint.publicKey.toBuffer()], adobe.programId);
     [voucherMintKey] = findAddr([Buffer.from("VOUCHER"), tokenMint.publicKey.toBuffer()], adobe.programId);
 
@@ -113,7 +113,7 @@ describe("adobe flash loan program", () => {
     });
 
     it("adobe add_pool", async () => {
-        await adobe.rpc.addPool({
+        await adobe.rpc.addPool(poolBump, {
             accounts: {
                 authority: wallet.publicKey,
                 state: stateKey,

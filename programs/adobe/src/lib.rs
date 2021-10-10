@@ -39,9 +39,10 @@ pub mod adobe {
 
     // ADD POOL
     // for a given token mint, sets up a pool struct, token account, and voucher mint
-    pub fn add_pool(ctx: Context<AddPool>) -> ProgramResult {
+    pub fn add_pool(ctx: Context<AddPool>, pool_bump: u8) -> ProgramResult {
         msg!("adobe add_pool");
 
+        ctx.accounts.pool.bump = pool_bump;
         ctx.accounts.pool.token_mint = ctx.accounts.token_mint.key();
         ctx.accounts.pool.pool_token = ctx.accounts.pool_token.key();
         ctx.accounts.pool.voucher_mint = ctx.accounts.voucher_mint.key();
@@ -215,6 +216,7 @@ pub struct New<'info> {
 }
 
 #[derive(Accounts)]
+#[instruction(pool_bump: u8)]
 pub struct AddPool<'info> {
     #[account(mut)]
     pub authority: Signer<'info>,
@@ -228,7 +230,7 @@ pub struct AddPool<'info> {
     #[account(
         init,
         seeds = [&Pool::discriminator()[..], token_mint.key().as_ref()],
-        bump,
+        bump = pool_bump,
         payer = authority,
     )]
     pub pool: Account<'info, Pool>,
@@ -259,7 +261,7 @@ pub struct AddPool<'info> {
 pub struct Deposit<'info> {
     #[account(seeds = [&State::discriminator()[..]], bump = state.bump)]
     pub state: Account<'info, State>,
-    #[account(seeds = [&Pool::discriminator()[..], pool.token_mint.as_ref()], bump)]
+    #[account(seeds = [&Pool::discriminator()[..], pool.token_mint.as_ref()], bump = pool.bump)]
     pub pool: Account<'info, Pool>,
     #[account(mut, address = pool.pool_token)]
     pub pool_token: Account<'info, TokenAccount>,
@@ -276,7 +278,7 @@ pub struct Deposit<'info> {
 pub struct Withdraw<'info> {
     #[account(seeds = [&State::discriminator()[..]], bump = state.bump)]
     pub state: Account<'info, State>,
-    #[account(seeds = [&Pool::discriminator()[..], pool.token_mint.as_ref()], bump)]
+    #[account(seeds = [&Pool::discriminator()[..], pool.token_mint.as_ref()], bump = pool.bump)]
     pub pool: Account<'info, Pool>,
     #[account(mut, address = pool.pool_token)]
     pub pool_token: Account<'info, TokenAccount>,
@@ -293,7 +295,7 @@ pub struct Withdraw<'info> {
 pub struct Borrow<'info> {
     #[account(seeds = [&State::discriminator()[..]], bump = state.bump)]
     pub state: Account<'info, State>,
-    #[account(seeds = [&Pool::discriminator()[..], pool.token_mint.as_ref()], bump)]
+    #[account(seeds = [&Pool::discriminator()[..], pool.token_mint.as_ref()], bump = pool.bump)]
     pub pool: Account<'info, Pool>,
     #[account(mut, address = pool.pool_token)]
     pub pool_token: Account<'info, TokenAccount>,
@@ -308,7 +310,7 @@ pub struct Restore<'info> {
     pub user: Signer<'info>,
     #[account(seeds = [&State::discriminator()[..]], bump = state.bump)]
     pub state: Account<'info, State>,
-    #[account(seeds = [&Pool::discriminator()[..], pool.token_mint.as_ref()], bump)]
+    #[account(seeds = [&Pool::discriminator()[..], pool.token_mint.as_ref()], bump = pool.bump)]
     pub pool: Account<'info, Pool>,
     #[account(mut, address = pool.pool_token)]
     pub pool_token: Account<'info, TokenAccount>,
@@ -327,6 +329,7 @@ pub struct State {
 #[account]
 #[derive(Default)]
 pub struct Pool {
+    bump: u8,
     token_mint: Pubkey,
     pool_token: Pubkey,
     voucher_mint: Pubkey,
