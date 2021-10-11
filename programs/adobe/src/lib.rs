@@ -17,8 +17,8 @@ pub mod adobe {
 
     // NEW
     // register authority for adding new loan pools
-    pub fn new(ctx: Context<New>, state_bump: u8) -> ProgramResult {
-        msg!("adobe new");
+    pub fn initalize(ctx: Context<Initialize>, state_bump: u8) -> ProgramResult {
+        msg!("adobe initialize");
 
         ctx.accounts.state.bump = state_bump;
         ctx.accounts.state.authority = ctx.accounts.authority.key();
@@ -190,7 +190,7 @@ pub mod adobe {
 
 #[derive(Accounts)]
 #[instruction(state_bump: u8)]
-pub struct New<'info> {
+pub struct Initialize<'info> {
     #[account(mut)]
     pub authority: Signer<'info>,
     #[account(

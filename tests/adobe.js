@@ -1,6 +1,5 @@
 import anchor from "@project-serum/anchor";
 import spl from "@solana/spl-token";
-import { sha256 } from "js-sha256";
 import { findAddr, findAssocAddr, discriminator, airdrop} from "../app/util.js";
 
 const LAMPORTS_PER_SOL = anchor.web3.LAMPORTS_PER_SOL;
@@ -72,8 +71,8 @@ describe("adobe flash loan program", () => {
         await setup();
     });
 
-    it("adobe new", async () => {
-        await adobe.rpc.new(stateBump, {
+    it("adobe initalize", async () => {
+        await adobe.rpc.initialize(stateBump, {
             accounts: {
                 authority: wallet.publicKey,
                 state: stateKey,
