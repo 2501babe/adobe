@@ -13,6 +13,7 @@ const TOKEN_DECIMALS = 6;
 
 anchor.setProvider(anchor.Provider.local(null, TXN_OPTS));
 const provider = anchor.getProvider();
+api.setProvider(provider);
 
 const adobe = anchor.workspace.Adobe;
 const wallet = anchor.getProvider().wallet;
@@ -81,66 +82,11 @@ describe("adobe flash loan program", () => {
     });
 
     it("adobe deposit", async () => {
-        // deposit should implicitly create the user voucher account if needed
-        [userVoucherKey] = findAssocAddr(wallet.publicKey, voucherMintKey);
-        let createIxn = spl.Token.createAssociatedTokenAccountInstruction(
-            ASSOCIATED_TOKEN_PROGRAM_ID,
-            TOKEN_PROGRAM_ID,
-            voucherMintKey,
-            userVoucherKey,
-            wallet.publicKey,
-            wallet.publicKey,
-        );
-
-        // we are virtuous and do not require a wallet signature on our instruction
-        let approveIxn = spl.Token.createApproveInstruction(
-            TOKEN_PROGRAM_ID,
-            userTokenKey,
-            stateKey,
-            wallet.publicKey,
-            [],
-            amount * 2,
-        );
-
-        await adobe.rpc.deposit(new anchor.BN(amount * 2), {
-            accounts: {
-                state: stateKey,
-                pool: poolKey,
-                poolToken: poolTokenKey,
-                voucherMint: voucherMintKey,
-                userToken: userTokenKey,
-                userVoucher: userVoucherKey,
-                tokenProgram: TOKEN_PROGRAM_ID,
-            },
-            signers: [wallet.payer],
-            instructions: [createIxn, approveIxn],
-        });
+        await api.deposit(wallet, tokenMint, amount * 2);
     });
 
     it("adobe withdraw", async () => {
-        // again this is hardly much different
-        let approveIxn = spl.Token.createApproveInstruction(
-            TOKEN_PROGRAM_ID,
-            userVoucherKey,
-            stateKey,
-            wallet.publicKey,
-            [],
-            amount,
-        );
-
-        await adobe.rpc.withdraw(new anchor.BN(amount), {
-            accounts: {
-                state: stateKey,
-                pool: poolKey,
-                poolToken: poolTokenKey,
-                voucherMint: voucherMintKey,
-                userToken: userTokenKey,
-                userVoucher: userVoucherKey,
-                tokenProgram: TOKEN_PROGRAM_ID,
-            },
-            signers: [wallet.payer],
-            instructions: [approveIxn],
-        });
+        await api.withdraw(wallet, tokenMint, amount);
     });
 
     it("adobe borrow/restore", async () => {
