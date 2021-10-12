@@ -17,7 +17,7 @@ pub mod adobe {
 
     // NEW
     // register authority for adding new loan pools
-    pub fn initalize(ctx: Context<Initialize>, state_bump: u8) -> ProgramResult {
+    pub fn initialize(ctx: Context<Initialize>, state_bump: u8) -> ProgramResult {
         msg!("adobe initialize");
 
         ctx.accounts.state.bump = state_bump;

@@ -1,6 +1,7 @@
 import anchor from "@project-serum/anchor";
 import spl from "@solana/spl-token";
-import { findAddr, findAssocAddr, discriminator, airdrop} from "../app/util.js";
+import { findAddr, findAssocAddr, discriminator, airdrop } from "../app/util.js";
+import * as api from "../app/api.js";
 
 const LAMPORTS_PER_SOL = anchor.web3.LAMPORTS_PER_SOL;
 const SYSVAR_INSTRUCTIONS_PUBKEY = anchor.web3.SYSVAR_INSTRUCTIONS_PUBKEY;
@@ -72,32 +73,11 @@ describe("adobe flash loan program", () => {
     });
 
     it("adobe initalize", async () => {
-        await adobe.rpc.initialize(stateBump, {
-            accounts: {
-                authority: wallet.publicKey,
-                state: stateKey,
-                rent: anchor.web3.SYSVAR_RENT_PUBKEY,
-                systemProgram: anchor.web3.SystemProgram.programId,
-            },
-            signers: [wallet.payer],
-        });
+        await api.initialize(wallet);
     });
 
     it("adobe add_pool", async () => {
-        await adobe.rpc.addPool(poolBump, {
-            accounts: {
-                authority: wallet.publicKey,
-                state: stateKey,
-                tokenMint: tokenMint.publicKey,
-                pool: poolKey,
-                poolToken: poolTokenKey,
-                voucherMint: voucherMintKey,
-                rent: anchor.web3.SYSVAR_RENT_PUBKEY,
-                systemProgram: anchor.web3.SystemProgram.programId,
-                tokenProgram: TOKEN_PROGRAM_ID,
-            },
-            signers: [wallet.payer],
-        });
+        await api.addPool(wallet, tokenMint);
     });
 
     it("adobe deposit", async () => {
