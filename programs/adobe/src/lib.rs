@@ -8,7 +8,7 @@ declare_id!("Fg6PaFpoGXkYsidMpWTK6W2BeZ7FEfcYkg476zPFsLnS");
 
 const TOKEN_NAMESPACE: &[u8]   = b"TOKEN";
 const VOUCHER_NAMESPACE: &[u8] = b"VOUCHER";
-const RESTORE_OPCODE: u64      = 0x4d257a808b23063a;
+const REPAY_OPCODE: u64        = 0xea674352d0eadba6;
 
 #[program]
 #[deny(unused_must_use)]
@@ -114,22 +114,22 @@ pub mod adobe {
     }
 
     // BORROW
-    // confirms there exists a matching restore, then lends tokens
+    // confirms there exists a matching repay, then lends tokens
     pub fn borrow(ctx: Context<Borrow>, amount: u64) -> ProgramResult {
         msg!("adobe borrow");
 
         let ixn_data = ctx.accounts.instructions.try_borrow_data()?;
 
-        // loop through instructions, looking for an equivalent restore to this borrow
+        // loop through instructions, looking for an equivalent repay to this borrow
         let mut i = solana::sysvar::instructions::load_current_index(&ixn_data) as usize + 1;
         loop {
             // get the next instruction, die if theres no more
             if let Ok(ixn) = solana::sysvar::instructions::load_instruction_at(i, &ixn_data) {
                 // check if its a call to this program, otherwise continue
                 if ixn.program_id == *ctx.program_id {
-                    // the only allowed call to this program is an equivalent restore
+                    // the only allowed call to this program is an equivalent repay
                     // this is the "yes i know the difference between regular and context-free grammers" case
-                    if u64::from_be_bytes(ixn.data[..8].try_into().unwrap()) == RESTORE_OPCODE
+                    if u64::from_be_bytes(ixn.data[..8].try_into().unwrap()) == REPAY_OPCODE
                     && u64::from_le_bytes(ixn.data[8..16].try_into().unwrap()) == amount {
                         break;
                     } else {
@@ -140,7 +140,7 @@ pub mod adobe {
                 }
             }
             else {
-                return Err(AdobeError::NoRestore.into());
+                return Err(AdobeError::NoRepay.into());
             }
         }
 
@@ -164,9 +164,9 @@ pub mod adobe {
         Ok(())
     }
 
-    // RESTORE
+    // REPAY
     // receives tokens
-    pub fn restore(ctx: Context<Restore>, amount: u64) -> ProgramResult {
+    pub fn repay(ctx: Context<Repay>, amount: u64) -> ProgramResult {
         let state_seed: &[&[&[u8]]] = &[&[
             &State::discriminator()[..],
             &[ctx.accounts.state.bump],
@@ -295,7 +295,7 @@ pub struct Borrow<'info> {
 }
 
 #[derive(Accounts)]
-pub struct Restore<'info> {
+pub struct Repay<'info> {
     pub user: Signer<'info>,
     #[account(seeds = [&State::discriminator()[..]], bump = state.bump)]
     pub state: Account<'info, State>,
@@ -326,8 +326,8 @@ pub struct Pool {
 
 #[error]
 pub enum AdobeError {
-    #[msg("borrow requires an equivalent restore")]
-    NoRestore,
-    #[msg("non-restore adobe calls after borrow are disallowed")]
+    #[msg("borrow requires an equivalent repay")]
+    NoRepay,
+    #[msg("non-repay adobe calls after borrow are disallowed")]
     ExtraCall,
 }

@@ -89,7 +89,7 @@ describe("adobe flash loan program", () => {
         await api.withdraw(wallet, tokenMint, amount);
     });
 
-    it("adobe borrow/restore", async () => {
+    it("adobe borrow/repay", async () => {
         let borrowIxn = adobe.instruction.borrow(new anchor.BN(amount), {
             accounts: {
                 state: stateKey,
@@ -100,7 +100,7 @@ describe("adobe flash loan program", () => {
                 tokenProgram: TOKEN_PROGRAM_ID,
         }});
 
-        let restoreIxn = adobe.instruction.restore(new anchor.BN(amount), {
+        let repayIxn = adobe.instruction.repay(new anchor.BN(amount), {
             accounts: {
                 user: wallet.publicKey,
                 pool: poolKey,
@@ -112,7 +112,7 @@ describe("adobe flash loan program", () => {
 
         let txn = new anchor.web3.Transaction;
         txn.add(borrowIxn);
-        txn.add(restoreIxn);
+        txn.add(repayIxn);
 
         await provider.send(txn);
     });
