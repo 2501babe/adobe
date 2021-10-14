@@ -1,3 +1,4 @@
+import assert from "assert";
 import anchor from "@project-serum/anchor";
 import spl from "@solana/spl-token";
 import { findAddr, findAssocAddr, discriminator, airdrop } from "../app/util.js";
@@ -8,7 +9,7 @@ const SYSVAR_INSTRUCTIONS_PUBKEY = anchor.web3.SYSVAR_INSTRUCTIONS_PUBKEY;
 const TOKEN_PROGRAM_ID = spl.TOKEN_PROGRAM_ID;
 const ASSOCIATED_TOKEN_PROGRAM_ID = spl.ASSOCIATED_TOKEN_PROGRAM_ID;
 
-const TXN_OPTS = {commitment: "processed", preflightCommitment: "processed", skipPreflight: false};
+const TXN_OPTS = {commitment: "processed", preflightCommitment: "processed", skipPreflight: true};
 const TOKEN_DECIMALS = 6;
 
 anchor.setProvider(anchor.Provider.local(null, TXN_OPTS));
@@ -66,6 +67,15 @@ async function setup() {
     );
 }
 
+// what it says
+async function poolBalance(mint) {
+    let [poolTokenKey] = findAddr([Buffer.from("TOKEN"), mint.publicKey.toBuffer()], adobe.programId);
+    let res = await provider.connection.getTokenAccountBalance(poolTokenKey);
+
+    // this is a string but im just using it for asserts so who cares
+    return res.value.amount;
+}
+
 describe("adobe flash loan program", () => {
     let amount = 10 ** TOKEN_DECIMALS;
 
@@ -96,7 +106,33 @@ describe("adobe flash loan program", () => {
         txn.add(borrowIxn);
         txn.add(repayIxn);
 
+        let balBefore = await poolBalance(tokenMint);
         await provider.send(txn);
+        let balAfter = await poolBalance(tokenMint);
+
+        assert.equal(balAfter, balBefore, "program token balance unchanged");
+
+        txn = new anchor.web3.Transaction;
+        txn.add(borrowIxn);
+        await assert.rejects(async () => provider.send(txn), "borrow without repay fails");
+
+        txn = new anchor.web3.Transaction;
+        txn.add(borrowIxn);
+        txn.add(borrowIxn);
+        txn.add(repayIxn);
+        await assert.rejects(provider.send(txn), "borrow with something before repay fails");
+
+        [borrowIxn] = api.borrow(wallet, tokenMint, amount + 1);
+        txn = new anchor.web3.Transaction;
+        txn.add(borrowIxn);
+        txn.add(repayIxn);
+        await assert.rejects(provider.send(txn), "borrow more than repay fails");
+
+        [borrowIxn, repayIxn] = api.borrow(wallet, tokenMint, amount * 10);
+        txn = new anchor.web3.Transaction;
+        txn.add(borrowIxn);
+        txn.add(repayIxn);
+        await assert.rejects(provider.send(txn), "borrow more than available fails");
     });
 
 });
