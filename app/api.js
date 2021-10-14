@@ -128,4 +128,42 @@ function withdraw(user, mint, amount) {
     });
 }
 
-export { setProvider, initialize, addPool, deposit, withdraw };
+// all the other api functions return promises of rpc calls
+// this function returns a 2-array with borrow and repay instructions
+// caller should insert them into their transaction where appropriate
+// do not attempt to call any adobe methods between borrow and repay
+// that would be rude if you tried
+function borrow(user, mint, amount) {
+    let [poolKey, poolTokenKey] = getMintKeys(mint);
+    let [userTokenKey] = findAssocAddr(user.publicKey, mint.publicKey);
+
+    let borrowIxn = adobe.instruction.borrow(new anchor.BN(amount), {
+        accounts: {
+            state: stateKey,
+            pool: poolKey,
+            poolToken: poolTokenKey,
+            userToken: userTokenKey,
+            instructions: SYSVAR_INSTRUCTIONS_PUBKEY,
+            tokenProgram: TOKEN_PROGRAM_ID,
+    }});
+
+    // XXX my one regret about the current design is this requires a user signature
+    // we could put the signature on borrow, and have borrow do an approval
+    // but this doesnt actually get us anything of value
+    // we could also have a client approval, and this would be my ideal design
+    // but requiring a third instruction drastically reduces avail bytes for transaction proper
+    // the new tx format might make this viable by cutting address repetition tho
+    let repayIxn = adobe.instruction.repay(new anchor.BN(amount), {
+        accounts: {
+            user: user.publicKey,
+            pool: poolKey,
+            state: stateKey,
+            poolToken: poolTokenKey,
+            userToken: userTokenKey,
+            tokenProgram: TOKEN_PROGRAM_ID,
+    }});
+
+    return [borrowIxn, repayIxn];
+}
+
+export { setProvider, initialize, addPool, deposit, withdraw, borrow };

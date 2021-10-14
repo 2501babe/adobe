@@ -90,25 +90,7 @@ describe("adobe flash loan program", () => {
     });
 
     it("adobe borrow/repay", async () => {
-        let borrowIxn = adobe.instruction.borrow(new anchor.BN(amount), {
-            accounts: {
-                state: stateKey,
-                pool: poolKey,
-                poolToken: poolTokenKey,
-                userToken: userTokenKey,
-                instructions: SYSVAR_INSTRUCTIONS_PUBKEY,
-                tokenProgram: TOKEN_PROGRAM_ID,
-        }});
-
-        let repayIxn = adobe.instruction.repay(new anchor.BN(amount), {
-            accounts: {
-                user: wallet.publicKey,
-                pool: poolKey,
-                state: stateKey,
-                poolToken: poolTokenKey,
-                userToken: userTokenKey,
-                tokenProgram: TOKEN_PROGRAM_ID,
-        }});
+        let [borrowIxn, repayIxn] = api.borrow(wallet, tokenMint, amount);
 
         let txn = new anchor.web3.Transaction;
         txn.add(borrowIxn);
