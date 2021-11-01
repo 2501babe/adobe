@@ -120,12 +120,6 @@ pub mod adobe {
 
         let ixns = ctx.accounts.instructions.to_account_info();
 
-        // XXX ok i want to do a couple things different here
-        // * start at zero, find one borrow then one repay
-        // * check if in cpi and abort
-        // first is to protect in case store_current_index can manipulate state
-        // second is to protect against double borrow from cpi
-
         // make sure this isnt a cpi call
         let current_index = solana::sysvar::instructions::load_current_index_checked(&ixns)? as usize;
         let current_ixn = solana::sysvar::instructions::load_instruction_at_checked(current_index, &ixns)?;
@@ -134,6 +128,8 @@ pub mod adobe {
         }
 
         // loop through instructions, looking for an equivalent repay to this borrow
+        // XXX i think i want to start from zero and find the borrow and repay
+        // im not sure what store_current_index is for but im worried it can offset future reads
         let mut i = current_index + 1;
         loop {
             // get the next instruction, die if theres no more
