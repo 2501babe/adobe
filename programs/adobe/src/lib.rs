@@ -118,13 +118,13 @@ pub mod adobe {
     pub fn borrow(ctx: Context<Borrow>, amount: u64) -> ProgramResult {
         msg!("adobe borrow");
 
-        let ixn_data = ctx.accounts.instructions.try_borrow_data()?;
+        let ixns = ctx.accounts.instructions.to_account_info();
 
         // loop through instructions, looking for an equivalent repay to this borrow
-        let mut i = solana::sysvar::instructions::load_current_index(&ixn_data) as usize + 1;
+        let mut i = solana::sysvar::instructions::load_current_index_checked(&ixns)? as usize + 1;
         loop {
             // get the next instruction, die if theres no more
-            if let Ok(ixn) = solana::sysvar::instructions::load_instruction_at(i, &ixn_data) {
+            if let Ok(ixn) = solana::sysvar::instructions::load_instruction_at_checked(i, &ixns) {
                 // check if its a call to this program, otherwise continue
                 if ixn.program_id == *ctx.program_id {
                     // the only allowed call to this program is an equivalent repay
