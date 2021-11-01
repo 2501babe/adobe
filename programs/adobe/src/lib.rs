@@ -120,8 +120,21 @@ pub mod adobe {
 
         let ixns = ctx.accounts.instructions.to_account_info();
 
+        // XXX ok i want to do a couple things different here
+        // * start at zero, find one borrow then one repay
+        // * check if in cpi and abort
+        // first is to protect in case store_current_index can manipulate state
+        // second is to protect against double borrow from cpi
+
+        // make sure this isnt a cpi call
+        let current_index = solana::sysvar::instructions::load_current_index_checked(&ixns)? as usize;
+        let current_ixn = solana::sysvar::instructions::load_instruction_at_checked(current_index, &ixns)?;
+        if current_ixn.program_id != *ctx.program_id {
+            return Err(AdobeError::CpiBorrow.into());
+        }
+
         // loop through instructions, looking for an equivalent repay to this borrow
-        let mut i = solana::sysvar::instructions::load_current_index_checked(&ixns)? as usize + 1;
+        let mut i = current_index + 1;
         loop {
             // get the next instruction, die if theres no more
             if let Ok(ixn) = solana::sysvar::instructions::load_instruction_at_checked(i, &ixns) {
@@ -330,4 +343,6 @@ pub enum AdobeError {
     NoRepay,
     #[msg("non-repay adobe calls after borrow are disallowed")]
     ExtraCall,
+    #[msg("cannot call borrow via cpi")]
+    CpiBorrow,
 }

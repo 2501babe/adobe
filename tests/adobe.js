@@ -17,6 +17,7 @@ const provider = anchor.getProvider();
 api.setProvider(provider);
 
 const adobe = anchor.workspace.Adobe;
+const evil = anchor.workspace.Evil;
 const wallet = anchor.getProvider().wallet;
 
 // we create a fresh token, for which we need...
@@ -133,6 +134,24 @@ describe("adobe flash loan program", () => {
         txn.add(borrowIxn);
         txn.add(repayIxn);
         await assert.rejects(provider.send(txn), "borrow more than available fails");
+
+        [borrowIxn, repayIxn] = api.borrow(wallet, tokenMint, amount / 10);
+        let evilIxn = evil.instruction.borrowProxy(new anchor.BN(amount / 10), {
+            accounts: {
+                state: stateKey,
+                pool: poolKey,
+                poolToken: poolTokenKey,
+                userToken: userTokenKey,
+                instructions: SYSVAR_INSTRUCTIONS_PUBKEY,
+                tokenProgram: TOKEN_PROGRAM_ID,
+                adobeProgram: adobe.programId,
+            },
+        });
+        txn = new anchor.web3.Transaction;
+        txn.add(borrowIxn);
+        txn.add(evilIxn);
+        txn.add(repayIxn);
+        await assert.rejects(provider.send(txn), "borrow inside cpi fails");
     });
 
 });

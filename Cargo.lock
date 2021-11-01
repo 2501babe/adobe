@@ -503,6 +503,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "evil"
+version = "0.1.0"
+dependencies = [
+ "adobe",
+ "anchor-lang",
+]
+
+[[package]]
 name = "feature-probe"
 version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
