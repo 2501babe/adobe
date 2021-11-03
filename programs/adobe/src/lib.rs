@@ -22,6 +22,7 @@ pub mod adobe {
 
         ctx.accounts.state.bump = state_bump;
         ctx.accounts.state.authority = ctx.accounts.authority.key();
+        ctx.accounts.state.borrowing = false;
 
         Ok(())
     }
@@ -118,6 +119,10 @@ pub mod adobe {
     pub fn borrow(ctx: Context<Borrow>, amount: u64) -> ProgramResult {
         msg!("adobe borrow");
 
+        if ctx.accounts.state.borrowing {
+            return Err(AdobeError::Borrowing.into());
+        }
+
         let ixns = ctx.accounts.instructions.to_account_info();
 
         // make sure this isnt a cpi call
@@ -171,6 +176,7 @@ pub mod adobe {
         );
 
         token::transfer(transfer_ctx, amount)?;
+        ctx.accounts.state.borrowing = true;
 
         Ok(())
     }
@@ -194,6 +200,7 @@ pub mod adobe {
         );
 
         token::transfer(transfer_ctx, amount)?;
+        ctx.accounts.state.borrowing = false;
 
         Ok(())
     }
@@ -293,7 +300,7 @@ pub struct Withdraw<'info> {
 
 #[derive(Accounts)]
 pub struct Borrow<'info> {
-    #[account(seeds = [&State::discriminator()[..]], bump = state.bump)]
+    #[account(mut, seeds = [&State::discriminator()[..]], bump = state.bump)]
     pub state: Account<'info, State>,
     #[account(seeds = [&Pool::discriminator()[..], pool.token_mint.as_ref()], bump = pool.bump)]
     pub pool: Account<'info, Pool>,
@@ -308,7 +315,7 @@ pub struct Borrow<'info> {
 #[derive(Accounts)]
 pub struct Repay<'info> {
     pub user: Signer<'info>,
-    #[account(seeds = [&State::discriminator()[..]], bump = state.bump)]
+    #[account(mut, seeds = [&State::discriminator()[..]], bump = state.bump)]
     pub state: Account<'info, State>,
     #[account(seeds = [&Pool::discriminator()[..], pool.token_mint.as_ref()], bump = pool.bump)]
     pub pool: Account<'info, Pool>,
@@ -324,6 +331,7 @@ pub struct Repay<'info> {
 pub struct State {
     bump: u8,
     authority: Pubkey,
+    borrowing: bool,
 }
 
 #[account]
@@ -343,4 +351,6 @@ pub enum AdobeError {
     ExtraCall,
     #[msg("cannot call borrow via cpi")]
     CpiBorrow,
+    #[msg("a borrow is already in progress")]
+    Borrowing,
 }

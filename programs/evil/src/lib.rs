@@ -28,6 +28,7 @@ pub mod evil {
 
 #[derive(Accounts)]
 pub struct Adobe<'info> {
+    #[account(mut)]
     pub state: AccountInfo<'info>,
     pub pool: AccountInfo<'info>,
     pub pool_token: AccountInfo<'info>,
