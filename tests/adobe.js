@@ -20,6 +20,11 @@ const adobe = anchor.workspace.Adobe;
 const evil = anchor.workspace.Evil;
 const wallet = anchor.getProvider().wallet;
 
+console.log(
+`adobe: ${adobe.programId.toString()}
+evil: ${evil.programId.toString()}
+`);
+
 // we create a fresh token, for which we need...
 // * arbitrary authority
 // * derived pool address
@@ -103,6 +108,7 @@ describe("adobe flash loan program", () => {
     it("adobe borrow/repay", async () => {
         let [borrowIxn, repayIxn] = api.borrow(wallet, tokenMint, amount);
 
+        // normal borrow
         let txn = new anchor.web3.Transaction;
         txn.add(borrowIxn);
         txn.add(repayIxn);
@@ -110,31 +116,51 @@ describe("adobe flash loan program", () => {
         let balBefore = await poolBalance(tokenMint);
         await provider.send(txn);
         let balAfter = await poolBalance(tokenMint);
-
         assert.equal(balAfter, balBefore, "program token balance unchanged");
 
+        // dont repay
         txn = new anchor.web3.Transaction;
         txn.add(borrowIxn);
+
+        balBefore = await poolBalance(tokenMint);
         await assert.rejects(async () => provider.send(txn), "borrow without repay fails");
+        balAfter = await poolBalance(tokenMint);
+        assert.equal(balAfter, balBefore, "program token balance unchanged");
 
-        txn = new anchor.web3.Transaction;
-        txn.add(borrowIxn);
-        txn.add(borrowIxn);
-        txn.add(repayIxn);
-        await assert.rejects(provider.send(txn), "borrow with something before repay fails");
-
+        // dont fully repay
         [borrowIxn] = api.borrow(wallet, tokenMint, amount + 1);
         txn = new anchor.web3.Transaction;
         txn.add(borrowIxn);
         txn.add(repayIxn);
-        await assert.rejects(provider.send(txn), "borrow more than repay fails");
 
+        balBefore = await poolBalance(tokenMint);
+        await assert.rejects(provider.send(txn), "borrow more than repay fails");
+        balAfter = await poolBalance(tokenMint);
+        assert.equal(balAfter, balBefore, "program token balance unchanged");
+
+        // borrow too much
         [borrowIxn, repayIxn] = api.borrow(wallet, tokenMint, amount * 10);
         txn = new anchor.web3.Transaction;
         txn.add(borrowIxn);
         txn.add(repayIxn);
-        await assert.rejects(provider.send(txn), "borrow more than available fails");
 
+        balBefore = await poolBalance(tokenMint);
+        await assert.rejects(provider.send(txn), "borrow more than available fails");
+        balAfter = await poolBalance(tokenMint);
+        assert.equal(balAfter, balBefore, "program token balance unchanged");
+
+        // double borrow (raw instruction)
+        txn = new anchor.web3.Transaction;
+        txn.add(borrowIxn);
+        txn.add(borrowIxn);
+        txn.add(repayIxn);
+
+        balBefore = await poolBalance(tokenMint);
+        await assert.rejects(provider.send(txn), "multiple borrow fails");
+        balAfter = await poolBalance(tokenMint);
+        assert.equal(balAfter, balBefore, "program token balance unchanged");
+
+        // dounle borrow (direct cpi)
         [borrowIxn, repayIxn] = api.borrow(wallet, tokenMint, amount / 10);
         let evilIxn = evil.instruction.borrowProxy(new anchor.BN(amount / 10), {
             accounts: {
@@ -147,11 +173,58 @@ describe("adobe flash loan program", () => {
                 adobeProgram: adobe.programId,
             },
         });
+
         txn = new anchor.web3.Transaction;
         txn.add(borrowIxn);
         txn.add(evilIxn);
         txn.add(repayIxn);
-        await assert.rejects(provider.send(txn), "borrow inside cpi fails");
+
+        balBefore = await poolBalance(tokenMint);
+        //XXX await assert.rejects(provider.send(txn), "borrow and cpi fails");
+        balAfter = await poolBalance(tokenMint);
+        assert.equal(balAfter, balBefore, "program token balance unchanged");
+
+        txn = new anchor.web3.Transaction;
+        txn.add(evilIxn);
+        txn.add(borrowIxn);
+        txn.add(repayIxn);
+
+        balBefore = await poolBalance(tokenMint);
+        //XXX await assert.rejects(provider.send(txn), "cpi and borrow fails");
+        balAfter = await poolBalance(tokenMint);
+        assert.equal(balAfter, balBefore, "program token balance unchanged");
+
+        txn = new anchor.web3.Transaction;
+        txn.add(evilIxn);
+        txn.add(evilIxn);
+        txn.add(repayIxn);
+
+        balBefore = await poolBalance(tokenMint);
+        //XXX await assert.rejects(provider.send(txn), "cpi and cpi fails");
+        balAfter = await poolBalance(tokenMint);
+        assert.equal(balAfter, balBefore, "program token balance unchanged");
+
+        // dounle borrow (batched cpi)
+        evilIxn = evil.instruction.borrowDouble(new anchor.BN(amount / 10), {
+            accounts: {
+                state: stateKey,
+                pool: poolKey,
+                poolToken: poolTokenKey,
+                userToken: userTokenKey,
+                instructions: SYSVAR_INSTRUCTIONS_PUBKEY,
+                tokenProgram: TOKEN_PROGRAM_ID,
+                adobeProgram: adobe.programId,
+            },
+        });
+
+        txn = new anchor.web3.Transaction;
+        txn.add(evilIxn);
+        txn.add(repayIxn);
+
+        balBefore = await poolBalance(tokenMint);
+        await assert.rejects(provider.send(txn), "cpi double borrow fails");
+        balAfter = await poolBalance(tokenMint);
+        assert.equal(balAfter, balBefore, "program token balance unchanged");
     });
 
 });

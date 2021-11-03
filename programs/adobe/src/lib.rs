@@ -4,7 +4,7 @@ use anchor_lang::Discriminator;
 use anchor_spl::token::{self, Mint, TokenAccount, MintTo, Burn, Transfer, Token};
 use anchor_lang::solana_program as solana;
 
-declare_id!("Fg6PaFpoGXkYsidMpWTK6W2BeZ7FEfcYkg476zPFsLnS");
+declare_id!("VzRKfyFWHZtYWbQWfcnCGBrTg3tqqRV2weUqvrvVhuo");
 
 const TOKEN_NAMESPACE: &[u8]   = b"TOKEN";
 const VOUCHER_NAMESPACE: &[u8] = b"VOUCHER";
@@ -122,10 +122,12 @@ pub mod adobe {
 
         // make sure this isnt a cpi call
         let current_index = solana::sysvar::instructions::load_current_index_checked(&ixns)? as usize;
+        /*
         let current_ixn = solana::sysvar::instructions::load_instruction_at_checked(current_index, &ixns)?;
         if current_ixn.program_id != *ctx.program_id {
             return Err(AdobeError::CpiBorrow.into());
         }
+        */
 
         // loop through instructions, looking for an equivalent repay to this borrow
         // XXX i think i want to start from zero and find the borrow and repay
