@@ -180,7 +180,7 @@ describe("adobe flash loan program", () => {
         txn.add(repayIxn);
 
         balBefore = await poolBalance(tokenMint);
-        //XXX await assert.rejects(provider.send(txn), "borrow and cpi fails");
+        await assert.rejects(provider.send(txn), "borrow and cpi fails");
         balAfter = await poolBalance(tokenMint);
         assert.equal(balAfter, balBefore, "program token balance unchanged");
 
@@ -190,7 +190,7 @@ describe("adobe flash loan program", () => {
         txn.add(repayIxn);
 
         balBefore = await poolBalance(tokenMint);
-        //XXX await assert.rejects(provider.send(txn), "cpi and borrow fails");
+        await assert.rejects(provider.send(txn), "cpi and borrow fails");
         balAfter = await poolBalance(tokenMint);
         assert.equal(balAfter, balBefore, "program token balance unchanged");
 
@@ -200,7 +200,7 @@ describe("adobe flash loan program", () => {
         txn.add(repayIxn);
 
         balBefore = await poolBalance(tokenMint);
-        //XXX await assert.rejects(provider.send(txn), "cpi and cpi fails");
+        await assert.rejects(provider.send(txn), "cpi and cpi fails");
         balAfter = await poolBalance(tokenMint);
         assert.equal(balAfter, balBefore, "program token balance unchanged");
 
@@ -225,6 +225,12 @@ describe("adobe flash loan program", () => {
         await assert.rejects(provider.send(txn), "cpi double borrow fails");
         balAfter = await poolBalance(tokenMint);
         assert.equal(balAfter, balBefore, "program token balance unchanged");
+
+        // XXX next attack is: borrow, proxy repay 1, proxy borrow, repay
+        // solution is to ban cpi repay. then i can reenable borrow cpi ban for extra safety
+        // and finally have the borrow loop detect second borrows for good measure
+        // XXX i should compartmentalize by pool so people can borrow different collateral
+        // move mutex to pool, add the case in the check loop
     });
 
 });
