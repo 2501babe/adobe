@@ -141,15 +141,13 @@ pub mod adobe {
         loop {
             // get the next instruction, die if theres no more
             if let Ok(ixn) = solana::sysvar::instructions::load_instruction_at_checked(i, &ixns) {
-                // check if its a call to this program, otherwise continue
-                if ixn.program_id == *ctx.program_id {
-                    // the only allowed call to this program is an equivalent repay
-                    // this is the "yes i know the difference between regular and context-free grammers" case
-                    if u64::from_be_bytes(ixn.data[..8].try_into().unwrap()) == REPAY_OPCODE
-                    && u64::from_le_bytes(ixn.data[8..16].try_into().unwrap()) == amount {
+                // check if we have a toplevel repay, and if so confirm the amount
+                if ixn.program_id == *ctx.program_id
+                && u64::from_be_bytes(ixn.data[..8].try_into().unwrap()) == REPAY_OPCODE {
+                    if u64::from_le_bytes(ixn.data[8..16].try_into().unwrap()) == amount {
                         break;
                     } else {
-                        return Err(AdobeError::ExtraCall.into());
+                        return Err(AdobeError::IncorrectRepay.into());
                     }
                 } else {
                     i += 1;
@@ -347,8 +345,8 @@ pub struct Pool {
 pub enum AdobeError {
     #[msg("borrow requires an equivalent repay")]
     NoRepay,
-    #[msg("non-repay adobe calls after borrow are disallowed")]
-    ExtraCall,
+    #[msg("repay exists but in the wrong amount")]
+    IncorrectRepay,
     #[msg("cannot call borrow via cpi")]
     CpiBorrow,
     #[msg("a borrow is already in progress")]
