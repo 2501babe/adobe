@@ -227,6 +227,7 @@ describe("adobe flash loan program", () => {
         assert.equal(balAfter, balBefore, "program token balance unchanged");
 
         // borrow from one repay from another
+        let oldTokenMint = tokenMint;
         [borrowIxn] = api.borrow(wallet, tokenMint, amount);
         await setup();
         await api.addPool(wallet, tokenMint);
@@ -235,10 +236,13 @@ describe("adobe flash loan program", () => {
         txn.add(borrowIxn);
         txn.add(repayIxn);
 
-        //balBefore = await poolBalance(tokenMint);
+        let p1BalBefore = await poolBalance(oldTokenMint);
+        let p2BalBefore = await poolBalance(tokenMint);
         await assert.rejects(provider.send(txn), "repay different token fails");
-        //balAfter = await poolBalance(tokenMint);
-        //assert.equal(balAfter, balBefore, "program token balance unchanged");
+        let p1BalAfter = await poolBalance(oldTokenMint);
+        let p2BalAfter = await poolBalance(tokenMint);
+        assert.equal(p1BalAfter, p1BalBefore, "program first token balance unchanged");
+        assert.equal(p2BalAfter, p2BalBefore, "program second token balance unchanged");
 
         // XXX next attack is: borrow, proxy repay 1, proxy borrow, repay
         // solution is to ban cpi repay. then i can reenable borrow cpi ban for extra safety

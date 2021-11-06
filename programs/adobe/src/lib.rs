@@ -22,7 +22,6 @@ pub mod adobe {
 
         ctx.accounts.state.bump = state_bump;
         ctx.accounts.state.authority = ctx.accounts.authority.key();
-        ctx.accounts.state.borrowing = false;
 
         Ok(())
     }
@@ -33,6 +32,7 @@ pub mod adobe {
         msg!("adobe add_pool");
 
         ctx.accounts.pool.bump = pool_bump;
+        ctx.accounts.pool.borrowing = false;
         ctx.accounts.pool.token_mint = ctx.accounts.token_mint.key();
         ctx.accounts.pool.pool_token = ctx.accounts.pool_token.key();
         ctx.accounts.pool.voucher_mint = ctx.accounts.voucher_mint.key();
@@ -119,7 +119,7 @@ pub mod adobe {
     pub fn borrow(ctx: Context<Borrow>, amount: u64) -> ProgramResult {
         msg!("adobe borrow");
 
-        if ctx.accounts.state.borrowing {
+        if ctx.accounts.pool.borrowing {
             return Err(AdobeError::Borrowing.into());
         }
 
@@ -141,9 +141,14 @@ pub mod adobe {
         loop {
             // get the next instruction, die if theres no more
             if let Ok(ixn) = solana::sysvar::instructions::load_instruction_at_checked(i, &ixns) {
-                // check if we have a toplevel repay, and if so confirm the amount
+                // check if we have a toplevel repay toward the same pool
+                // if so, confirm the amount, otherwise next instruction
                 if ixn.program_id == *ctx.program_id
-                && u64::from_be_bytes(ixn.data[..8].try_into().unwrap()) == REPAY_OPCODE {
+                && u64::from_be_bytes(ixn.data[..8].try_into().unwrap()) == REPAY_OPCODE
+                && ixn.accounts[2].pubkey == ctx.accounts.pool.key() {
+                    // XXX outer if: if the pool accountmeta pubkey matches
+                    // when yes, we check amount and break or error
+                    // when no, continue
                     if u64::from_le_bytes(ixn.data[8..16].try_into().unwrap()) == amount {
                         break;
                     } else {
@@ -174,7 +179,7 @@ pub mod adobe {
         );
 
         token::transfer(transfer_ctx, amount)?;
-        ctx.accounts.state.borrowing = true;
+        ctx.accounts.pool.borrowing = true;
 
         Ok(())
     }
@@ -198,7 +203,7 @@ pub mod adobe {
         );
 
         token::transfer(transfer_ctx, amount)?;
-        ctx.accounts.state.borrowing = false;
+        ctx.accounts.pool.borrowing = false;
 
         Ok(())
     }
@@ -298,9 +303,9 @@ pub struct Withdraw<'info> {
 
 #[derive(Accounts)]
 pub struct Borrow<'info> {
-    #[account(mut, seeds = [&State::discriminator()[..]], bump = state.bump)]
+    #[account(seeds = [&State::discriminator()[..]], bump = state.bump)]
     pub state: Account<'info, State>,
-    #[account(seeds = [&Pool::discriminator()[..], pool.token_mint.as_ref()], bump = pool.bump)]
+    #[account(mut, seeds = [&Pool::discriminator()[..], pool.token_mint.as_ref()], bump = pool.bump)]
     pub pool: Account<'info, Pool>,
     #[account(mut, address = pool.pool_token)]
     pub pool_token: Account<'info, TokenAccount>,
@@ -313,9 +318,9 @@ pub struct Borrow<'info> {
 #[derive(Accounts)]
 pub struct Repay<'info> {
     pub user: Signer<'info>,
-    #[account(mut, seeds = [&State::discriminator()[..]], bump = state.bump)]
+    #[account(seeds = [&State::discriminator()[..]], bump = state.bump)]
     pub state: Account<'info, State>,
-    #[account(seeds = [&Pool::discriminator()[..], pool.token_mint.as_ref()], bump = pool.bump)]
+    #[account(mut, seeds = [&Pool::discriminator()[..], pool.token_mint.as_ref()], bump = pool.bump)]
     pub pool: Account<'info, Pool>,
     #[account(mut, address = pool.pool_token)]
     pub pool_token: Account<'info, TokenAccount>,
@@ -329,13 +334,13 @@ pub struct Repay<'info> {
 pub struct State {
     bump: u8,
     authority: Pubkey,
-    borrowing: bool,
 }
 
 #[account]
 #[derive(Default)]
 pub struct Pool {
     bump: u8,
+    borrowing: bool,
     token_mint: Pubkey,
     pool_token: Pubkey,
     voucher_mint: Pubkey,
