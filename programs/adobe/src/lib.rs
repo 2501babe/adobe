@@ -127,16 +127,12 @@ pub mod adobe {
 
         // make sure this isnt a cpi call
         let current_index = solana::sysvar::instructions::load_current_index_checked(&ixns)? as usize;
-        /*
         let current_ixn = solana::sysvar::instructions::load_instruction_at_checked(current_index, &ixns)?;
         if current_ixn.program_id != *ctx.program_id {
             return Err(AdobeError::CpiBorrow.into());
         }
-        */
 
         // loop through instructions, looking for an equivalent repay to this borrow
-        // XXX i think i want to start from zero and find the borrow and repay
-        // im not sure what store_current_index is for but im worried it can offset future reads
         let mut i = current_index + 1;
         loop {
             // get the next instruction, die if theres no more
@@ -184,6 +180,17 @@ pub mod adobe {
     // REPAY
     // receives tokens
     pub fn repay(ctx: Context<Repay>, amount: u64) -> ProgramResult {
+        msg!("adobe repay");
+
+        let ixns = ctx.accounts.instructions.to_account_info();
+
+        // make sure this isnt a cpi call
+        let current_index = solana::sysvar::instructions::load_current_index_checked(&ixns)? as usize;
+        let current_ixn = solana::sysvar::instructions::load_instruction_at_checked(current_index, &ixns)?;
+        if current_ixn.program_id != *ctx.program_id {
+            return Err(AdobeError::CpiRepay.into());
+        }
+
         let state_seed: &[&[&[u8]]] = &[&[
             &State::discriminator()[..],
             &[ctx.accounts.state.bump],
@@ -323,6 +330,7 @@ pub struct Repay<'info> {
     pub pool_token: Account<'info, TokenAccount>,
     #[account(mut, constraint =  user_token.mint == pool.token_mint)]
     pub user_token: Account<'info, TokenAccount>,
+    pub instructions: UncheckedAccount<'info>,
     pub token_program: Program<'info, Token>,
 }
 
@@ -351,6 +359,8 @@ pub enum AdobeError {
     IncorrectRepay,
     #[msg("cannot call borrow via cpi")]
     CpiBorrow,
+    #[msg("cannot call repay via cpi")]
+    CpiRepay,
     #[msg("a borrow is already in progress")]
     Borrowing,
 }

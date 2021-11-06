@@ -160,6 +160,7 @@ function borrow(user, mint, amount) {
             pool: poolKey,
             poolToken: poolTokenKey,
             userToken: userTokenKey,
+            instructions: SYSVAR_INSTRUCTIONS_PUBKEY,
             tokenProgram: TOKEN_PROGRAM_ID,
     }});
 

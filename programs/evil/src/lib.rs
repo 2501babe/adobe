@@ -72,6 +72,7 @@ impl<'info> Adobe<'info> {
                 pool: self.pool.clone(),
                 pool_token: self.pool_token.clone(),
                 user_token: self.user_token.clone(),
+                instructions: self.instructions.clone(),
                 token_program: self.token_program.clone(),
             },
         )
