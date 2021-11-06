@@ -226,6 +226,20 @@ describe("adobe flash loan program", () => {
         balAfter = await poolBalance(tokenMint);
         assert.equal(balAfter, balBefore, "program token balance unchanged");
 
+        // borrow from one repay from another
+        [borrowIxn] = api.borrow(wallet, tokenMint, amount);
+        await setup();
+        await api.addPool(wallet, tokenMint);
+        [, repayIxn] = api.borrow(wallet, tokenMint, amount);
+        txn = new anchor.web3.Transaction;
+        txn.add(borrowIxn);
+        txn.add(repayIxn);
+
+        //balBefore = await poolBalance(tokenMint);
+        await assert.rejects(provider.send(txn), "repay different token fails");
+        //balAfter = await poolBalance(tokenMint);
+        //assert.equal(balAfter, balBefore, "program token balance unchanged");
+
         // XXX next attack is: borrow, proxy repay 1, proxy borrow, repay
         // solution is to ban cpi repay. then i can reenable borrow cpi ban for extra safety
         // and finally have the borrow loop detect second borrows for good measure
