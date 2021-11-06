@@ -156,8 +156,8 @@ function borrow(user, mint, amount) {
     let repayIxn = adobe.instruction.repay(new anchor.BN(amount), {
         accounts: {
             user: user.publicKey,
-            pool: poolKey,
             state: stateKey,
+            pool: poolKey,
             poolToken: poolTokenKey,
             userToken: userTokenKey,
             tokenProgram: TOKEN_PROGRAM_ID,

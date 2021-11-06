@@ -164,6 +164,7 @@ describe("adobe flash loan program", () => {
         [borrowIxn, repayIxn] = api.borrow(wallet, tokenMint, amount / 10);
         let evilIxn = evil.instruction.borrowProxy(new anchor.BN(amount / 10), {
             accounts: {
+                user: wallet.publicKey,
                 state: stateKey,
                 pool: poolKey,
                 poolToken: poolTokenKey,
@@ -207,6 +208,7 @@ describe("adobe flash loan program", () => {
         // dounle borrow (batched cpi)
         evilIxn = evil.instruction.borrowDouble(new anchor.BN(amount / 10), {
             accounts: {
+                user: wallet.publicKey,
                 state: stateKey,
                 pool: poolKey,
                 poolToken: poolTokenKey,
@@ -231,6 +233,7 @@ describe("adobe flash loan program", () => {
         [borrowIxn] = api.borrow(wallet, tokenMint, amount);
         await setup();
         await api.addPool(wallet, tokenMint);
+        await api.deposit(wallet, tokenMint, amount * 2);
         [, repayIxn] = api.borrow(wallet, tokenMint, amount);
         txn = new anchor.web3.Transaction;
         txn.add(borrowIxn);
@@ -244,11 +247,43 @@ describe("adobe flash loan program", () => {
         assert.equal(p1BalAfter, p1BalBefore, "program first token balance unchanged");
         assert.equal(p2BalAfter, p2BalBefore, "program second token balance unchanged");
 
-        // XXX next attack is: borrow, proxy repay 1, proxy borrow, repay
-        // solution is to ban cpi repay. then i can reenable borrow cpi ban for extra safety
-        // and finally have the borrow loop detect second borrows for good measure
-        // XXX i should compartmentalize by pool so people can borrow different collateral
-        // move mutex to pool, add the case in the check loop
+        // borrow, hidden repay to reset mutex, borrow again, repay
+        [borrowIxn, repayIxn] = api.borrow(wallet, tokenMint, amount / 10);
+        let evilBorrow = evil.instruction.borrowProxy(new anchor.BN(amount / 10), {
+            accounts: {
+                user: wallet.publicKey,
+                state: stateKey,
+                pool: poolKey,
+                poolToken: poolTokenKey,
+                userToken: userTokenKey,
+                instructions: SYSVAR_INSTRUCTIONS_PUBKEY,
+                tokenProgram: TOKEN_PROGRAM_ID,
+                adobeProgram: adobe.programId,
+            },
+        });
+        let evilRepay = evil.instruction.repayProxy(new anchor.BN(1), {
+            accounts: {
+                user: wallet.publicKey,
+                state: stateKey,
+                pool: poolKey,
+                poolToken: poolTokenKey,
+                userToken: userTokenKey,
+                instructions: SYSVAR_INSTRUCTIONS_PUBKEY,
+                tokenProgram: TOKEN_PROGRAM_ID,
+                adobeProgram: adobe.programId,
+            },
+        });
+
+        txn = new anchor.web3.Transaction;
+        txn.add(borrowIxn);
+        txn.add(evilRepay);
+        txn.add(evilBorrow);
+        txn.add(repayIxn);
+
+        balBefore = await poolBalance(tokenMint);
+        await assert.rejects(provider.send(txn), "cpi dummy repay fails");
+        balAfter = await poolBalance(tokenMint);
+        assert.equal(balAfter, balBefore, "program token balance unchanged");
     });
 
 });

