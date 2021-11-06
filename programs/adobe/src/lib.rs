@@ -315,6 +315,7 @@ pub struct Borrow<'info> {
     pub pool_token: Account<'info, TokenAccount>,
     #[account(mut, constraint =  user_token.mint == pool.token_mint)]
     pub user_token: Account<'info, TokenAccount>,
+    #[account(address = solana::sysvar::instructions::ID)]
     pub instructions: UncheckedAccount<'info>,
     pub token_program: Program<'info, Token>,
 }
@@ -330,6 +331,7 @@ pub struct Repay<'info> {
     pub pool_token: Account<'info, TokenAccount>,
     #[account(mut, constraint =  user_token.mint == pool.token_mint)]
     pub user_token: Account<'info, TokenAccount>,
+    #[account(address = solana::sysvar::instructions::ID)]
     pub instructions: UncheckedAccount<'info>,
     pub token_program: Program<'info, Token>,
 }
