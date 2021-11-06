@@ -146,9 +146,6 @@ pub mod adobe {
                 if ixn.program_id == *ctx.program_id
                 && u64::from_be_bytes(ixn.data[..8].try_into().unwrap()) == REPAY_OPCODE
                 && ixn.accounts[2].pubkey == ctx.accounts.pool.key() {
-                    // XXX outer if: if the pool accountmeta pubkey matches
-                    // when yes, we check amount and break or error
-                    // when no, continue
                     if u64::from_le_bytes(ixn.data[8..16].try_into().unwrap()) == amount {
                         break;
                     } else {
