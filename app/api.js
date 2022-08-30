@@ -153,14 +153,13 @@ function borrow(user, mint, amount) {
     // we could also have a client approval, and this would be my ideal design
     // but requiring a third instruction drastically reduces avail bytes for transaction proper
     // the new tx format might make this viable by cutting address repetition tho
-    let repayIxn = adobe.instruction.repay(new anchor.BN(amount), {
+    let repayIxn = adobe.instruction.repay({
         accounts: {
             user: user.publicKey,
             state: stateKey,
             pool: poolKey,
             poolToken: poolTokenKey,
             userToken: userTokenKey,
-            instructions: SYSVAR_INSTRUCTIONS_PUBKEY,
             tokenProgram: TOKEN_PROGRAM_ID,
     }});
 

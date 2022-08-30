@@ -1,14 +1,14 @@
-use core::convert::TryInto;
 use anchor_lang::prelude::*;
-use anchor_lang::Discriminator;
-use anchor_spl::token::{self, Mint, TokenAccount, MintTo, Burn, Transfer, Token};
 use anchor_lang::solana_program as solana;
+use anchor_lang::Discriminator;
+use anchor_spl::token::{self, Burn, Mint, MintTo, Token, TokenAccount, Transfer};
+use core::convert::TryInto;
 
 declare_id!("VzRKfyFWHZtYWbQWfcnCGBrTg3tqqRV2weUqvrvVhuo");
 
-const TOKEN_NAMESPACE: &[u8]   = b"TOKEN";
+const TOKEN_NAMESPACE: &[u8] = b"TOKEN";
 const VOUCHER_NAMESPACE: &[u8] = b"VOUCHER";
-const REPAY_OPCODE: u64        = 0xea674352d0eadba6;
+const REPAY_OPCODE: u64 = 0xea674352d0eadba6;
 
 #[program]
 #[deny(unused_must_use)]
@@ -32,7 +32,7 @@ pub mod adobe {
         msg!("adobe add_pool");
 
         ctx.accounts.pool.bump = pool_bump;
-        ctx.accounts.pool.borrowing = false;
+        ctx.accounts.pool.borrowing = 0;
         ctx.accounts.pool.token_mint = ctx.accounts.token_mint.key();
         ctx.accounts.pool.pool_token = ctx.accounts.pool_token.key();
         ctx.accounts.pool.voucher_mint = ctx.accounts.voucher_mint.key();
@@ -45,10 +45,7 @@ pub mod adobe {
     pub fn deposit(ctx: Context<Deposit>, amount: u64) -> ProgramResult {
         msg!("adobe deposit");
 
-        let state_seed: &[&[&[u8]]] = &[&[
-            &State::discriminator()[..],
-            &[ctx.accounts.state.bump],
-        ]];
+        let state_seed: &[&[&[u8]]] = &[&[&State::discriminator()[..], &[ctx.accounts.state.bump]]];
 
         let transfer_ctx = CpiContext::new_with_signer(
             ctx.accounts.token_program.to_account_info(),
@@ -82,10 +79,7 @@ pub mod adobe {
     pub fn withdraw(ctx: Context<Withdraw>, amount: u64) -> ProgramResult {
         msg!("adobe withdraw");
 
-        let state_seed: &[&[&[u8]]] = &[&[
-            &State::discriminator()[..],
-            &[ctx.accounts.state.bump],
-        ]];
+        let state_seed: &[&[&[u8]]] = &[&[&State::discriminator()[..], &[ctx.accounts.state.bump]]];
 
         let burn_ctx = CpiContext::new_with_signer(
             ctx.accounts.token_program.to_account_info(),
@@ -119,47 +113,39 @@ pub mod adobe {
     pub fn borrow(ctx: Context<Borrow>, amount: u64) -> ProgramResult {
         msg!("adobe borrow");
 
-        if ctx.accounts.pool.borrowing {
-            return Err(AdobeError::Borrowing.into());
-        }
-
         let ixns = ctx.accounts.instructions.to_account_info();
 
-        // make sure this isnt a cpi call
-        let current_index = solana::sysvar::instructions::load_current_index_checked(&ixns)? as usize;
-        let current_ixn = solana::sysvar::instructions::load_instruction_at_checked(current_index, &ixns)?;
-        if current_ixn.program_id != *ctx.program_id {
-            return Err(AdobeError::CpiBorrow.into());
-        }
+        let current_index =
+            solana::sysvar::instructions::load_current_index_checked(&ixns)? as usize;
 
         // loop through instructions, looking for an equivalent repay to this borrow
         let mut i = current_index + 1;
         loop {
             // get the next instruction, die if theres no more
             if let Ok(ixn) = solana::sysvar::instructions::load_instruction_at_checked(i, &ixns) {
-                // check if we have a toplevel repay toward the same pool
-                // if so, confirm the amount, otherwise next instruction
+                // check if we have a toplevel repay toward the same pool,
+                // otherwise next instruction
                 if ixn.program_id == *ctx.program_id
-                && u64::from_be_bytes(ixn.data[..8].try_into().unwrap()) == REPAY_OPCODE
-                && ixn.accounts[2].pubkey == ctx.accounts.pool.key() {
-                    if u64::from_le_bytes(ixn.data[8..16].try_into().unwrap()) == amount {
-                        break;
-                    } else {
-                        return Err(AdobeError::IncorrectRepay.into());
-                    }
+                    && u64::from_be_bytes(ixn.data[..8].try_into().unwrap()) == REPAY_OPCODE
+                    && ixn.accounts[2].pubkey == ctx.accounts.pool.key()
+                {
+                    break;
                 } else {
                     i += 1;
                 }
-            }
-            else {
+            } else {
                 return Err(AdobeError::NoRepay.into());
             }
         }
 
-        let state_seed: &[&[&[u8]]] = &[&[
-            &State::discriminator()[..],
-            &[ctx.accounts.state.bump],
-        ]];
+        ctx.accounts.pool.borrowing = ctx
+            .accounts
+            .pool
+            .borrowing
+            .checked_add(amount)
+            .ok_or(AdobeError::ExcessiveBorrow)?;
+
+        let state_seed: &[&[&[u8]]] = &[&[&State::discriminator()[..], &[ctx.accounts.state.bump]]];
 
         let transfer_ctx = CpiContext::new_with_signer(
             ctx.accounts.token_program.to_account_info(),
@@ -172,29 +158,16 @@ pub mod adobe {
         );
 
         token::transfer(transfer_ctx, amount)?;
-        ctx.accounts.pool.borrowing = true;
 
         Ok(())
     }
 
     // REPAY
     // receives tokens
-    pub fn repay(ctx: Context<Repay>, amount: u64) -> ProgramResult {
+    pub fn repay(ctx: Context<Repay>) -> ProgramResult {
         msg!("adobe repay");
 
-        let ixns = ctx.accounts.instructions.to_account_info();
-
-        // make sure this isnt a cpi call
-        let current_index = solana::sysvar::instructions::load_current_index_checked(&ixns)? as usize;
-        let current_ixn = solana::sysvar::instructions::load_instruction_at_checked(current_index, &ixns)?;
-        if current_ixn.program_id != *ctx.program_id {
-            return Err(AdobeError::CpiRepay.into());
-        }
-
-        let state_seed: &[&[&[u8]]] = &[&[
-            &State::discriminator()[..],
-            &[ctx.accounts.state.bump],
-        ]];
+        let state_seed: &[&[&[u8]]] = &[&[&State::discriminator()[..], &[ctx.accounts.state.bump]]];
 
         let transfer_ctx = CpiContext::new_with_signer(
             ctx.accounts.token_program.to_account_info(),
@@ -206,8 +179,8 @@ pub mod adobe {
             state_seed,
         );
 
-        token::transfer(transfer_ctx, amount)?;
-        ctx.accounts.pool.borrowing = false;
+        token::transfer(transfer_ctx, ctx.accounts.pool.borrowing)?;
+        ctx.accounts.pool.borrowing = 0;
 
         Ok(())
     }
@@ -331,8 +304,6 @@ pub struct Repay<'info> {
     pub pool_token: Account<'info, TokenAccount>,
     #[account(mut, constraint =  user_token.mint == pool.token_mint)]
     pub user_token: Account<'info, TokenAccount>,
-    #[account(address = solana::sysvar::instructions::ID)]
-    pub instructions: UncheckedAccount<'info>,
     pub token_program: Program<'info, Token>,
 }
 
@@ -347,7 +318,7 @@ pub struct State {
 #[derive(Default)]
 pub struct Pool {
     bump: u8,
-    borrowing: bool,
+    borrowing: u64,
     token_mint: Pubkey,
     pool_token: Pubkey,
     voucher_mint: Pubkey,
@@ -356,13 +327,7 @@ pub struct Pool {
 #[error]
 pub enum AdobeError {
     #[msg("borrow requires an equivalent repay")]
-    NoRepay,
-    #[msg("repay exists but in the wrong amount")]
-    IncorrectRepay,
-    #[msg("cannot call borrow via cpi")]
-    CpiBorrow,
-    #[msg("cannot call repay via cpi")]
-    CpiRepay,
-    #[msg("a borrow is already in progress")]
-    Borrowing,
+    NoRepay, // 0x12c
+    #[msg("excessive borrow amount")]
+    ExcessiveBorrow, // 0x12d
 }

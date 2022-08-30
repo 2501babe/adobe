@@ -1,5 +1,5 @@
+use adobe::cpi::accounts::{Borrow, Repay};
 use anchor_lang::prelude::*;
-use adobe::cpi::accounts::{ Borrow, Repay};
 
 declare_id!("5zAQ1XhjuHcQtUXJSTjbmyDagmKVHDMi5iADv5PfYEUK");
 
@@ -25,10 +25,10 @@ pub mod evil {
         Ok(())
     }
 
-    pub fn repay_proxy(ctx: Context<Adobe>, amount: u64) -> ProgramResult {
+    pub fn repay_proxy(ctx: Context<Adobe>) -> ProgramResult {
         msg!("evil repay_proxy");
 
-        adobe::cpi::repay(ctx.accounts.into_repay_context(), amount)?;
+        adobe::cpi::repay(ctx.accounts.into_repay_context())?;
 
         Ok(())
     }
@@ -72,7 +72,6 @@ impl<'info> Adobe<'info> {
                 pool: self.pool.clone(),
                 pool_token: self.pool_token.clone(),
                 user_token: self.user_token.clone(),
-                instructions: self.instructions.clone(),
                 token_program: self.token_program.clone(),
             },
         )
