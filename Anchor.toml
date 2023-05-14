@@ -1,5 +1,5 @@
 [programs.localnet]
-adobe = "VzRKfyFWHZtYWbQWfcnCGBrTg3tqqRV2weUqvrvVhuo"
+adobe = "Adobe11111111111111111111111111111111111112"
 evil = "5zAQ1XhjuHcQtUXJSTjbmyDagmKVHDMi5iADv5PfYEUK"
 
 [registry]
@@ -10,4 +10,4 @@ cluster = "localnet"
 wallet = "~/.config/solana/id.json"
 
 [scripts]
-test = "mocha -t 1000000 tests/"
+test = "yarn run mocha -t 1000000 tests/"

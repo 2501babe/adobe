@@ -1,6 +1,5 @@
 import anchor from "@project-serum/anchor";
 import { TOKEN_PROGRAM_ID, ASSOCIATED_TOKEN_PROGRAM_ID } from "@solana/spl-token";
-import { sha256 } from "js-sha256";
 
 // abbreviation for too long name
 // note this returns the array
@@ -15,13 +14,6 @@ function findAssocAddr(walletKey, mintKey) {
     ], ASSOCIATED_TOKEN_PROGRAM_ID);
 }
 
-// turns rust class name into discriminator
-// i use these to namespace pdas
-function discriminator(name) {
-    let hash = sha256("account:" + name);
-    return Buffer.from(hash.substring(0, 16), "hex");
-}
-
 // dont leave home without one
 function sleep(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));
@@ -34,4 +26,4 @@ async function airdrop(provider, target, lamps) {
     return sig;
 }
 
-export { findAddr, findAssocAddr, discriminator, sleep, airdrop };
+export { findAddr, findAssocAddr, sleep, airdrop };
