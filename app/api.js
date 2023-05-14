@@ -1,18 +1,17 @@
 import anchor from "@project-serum/anchor";
 import spl from "@solana/spl-token";
-import { findAddr, findAssocAddr, discriminator } from "../app/util.js";
+import { findAddr, findAssocAddr } from "../app/util.js";
 
-const LAMPORTS_PER_SOL = anchor.web3.LAMPORTS_PER_SOL;
 const SYSVAR_INSTRUCTIONS_PUBKEY = anchor.web3.SYSVAR_INSTRUCTIONS_PUBKEY;
 const TOKEN_PROGRAM_ID = spl.TOKEN_PROGRAM_ID;
 const ASSOCIATED_TOKEN_PROGRAM_ID = spl.ASSOCIATED_TOKEN_PROGRAM_ID;
 
 const adobe = anchor.workspace.Adobe;
 
-let [stateKey, stateBump] = findAddr([discriminator("State")], adobe.programId);
+let [stateKey, stateBump] = findAddr([Buffer.from("STATE")], adobe.programId);
 
 function getMintKeys(mint) {
-    let [poolKey, poolBump] = findAddr([discriminator("Pool"), mint.publicKey.toBuffer()], adobe.programId);
+    let [poolKey, poolBump] = findAddr([Buffer.from("POOL"), mint.publicKey.toBuffer()], adobe.programId);
     let [poolTokenKey] = findAddr([Buffer.from("TOKEN"), mint.publicKey.toBuffer()], adobe.programId);
     let [voucherMintKey] = findAddr([Buffer.from("VOUCHER"), mint.publicKey.toBuffer()], adobe.programId);
 
@@ -24,7 +23,7 @@ function setProvider(provider) {
 }
 
 function initialize(authority) {
-    return adobe.rpc.initialize(stateBump, {
+    return adobe.rpc.initialize({
         accounts: {
             authority: authority.publicKey,
             state: stateKey,
@@ -36,9 +35,9 @@ function initialize(authority) {
 }
 
 function addPool(authority, mint) {
-    let [poolKey, poolTokenKey, voucherMintKey, poolBump] = getMintKeys(mint);
+    let [poolKey, poolTokenKey, voucherMintKey] = getMintKeys(mint);
 
-    return adobe.rpc.addPool(poolBump, {
+    return adobe.rpc.addPool({
         accounts: {
             authority: authority.publicKey,
             state: stateKey,
